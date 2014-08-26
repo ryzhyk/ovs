@@ -32,6 +32,7 @@
 #include <net/ipv6.h>
 #include <net/checksum.h>
 #include <net/dsfield.h>
+#include <net/netfilter/nf_conntrack_core.h>
 #include <net/sctp/checksum.h>
 
 #include "datapath.h"
@@ -743,8 +744,48 @@ static void execute_hash(struct sk_buff *skb, struct sw_flow_key *key,
 	key->ovs_flow_hash = hash;
 }
 
+static int conntrack(struct sk_buff *skb, struct sw_flow_key *key,
+			uint16_t zone)
+{
+	int nh_ofs = skb_network_offset(skb);
+	struct vport *vport;
+	struct net *net;
+
+	if (skb->nfct) {
+		pr_warn_once("Attempt to run through conntrack again\n");
+		return 0;
+	}
+
+#ifdef CONFIG_NET_NS
+	vport = OVS_CB(skb)->input_vport;
+	if (!vport)
+		return EINVAL;
+
+	net = vport->dp->net;
+#else
+	net = &init_net;
+#endif
+
+	/* The conntrack module expects to be working at L3. */
+	skb_pull(skb, nh_ofs);
+
+	/* xxx What's the best return val? */
+	if (nf_conntrack_in(net, PF_INET, NF_INET_PRE_ROUTING, skb) != NF_ACCEPT)
+		return EINVAL;
+
+	if (nf_conntrack_confirm(skb) != NF_ACCEPT)
+		return EINVAL;
+
+	/* Point back to L2, which OVS expects. */
+	skb_push(skb, nh_ofs);
+
+	key->phy.conn_state = ovs_map_nfctinfo(skb);
+
+	return 0;
+}
+
 static int execute_set_action(struct sk_buff *skb, struct sw_flow_key *key,
-			      const struct nlattr *nested_attr)
+			 const struct nlattr *nested_attr)
 {
 	int err = 0;
 
@@ -912,6 +953,10 @@ static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 
 		case OVS_ACTION_ATTR_SAMPLE:
 			err = sample(dp, skb, key, a);
+			break;
+
+		case OVS_ACTION_ATTR_CONNTRACK:
+			err = conntrack(skb, key, nla_get_u16(a));
 			break;
 		}
 
