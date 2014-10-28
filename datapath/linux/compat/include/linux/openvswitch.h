@@ -582,6 +582,18 @@ struct ovs_action_hash {
 };
 
 /**
+ * enum ovs_conntrack_attr - Attributes for %OVS_ACTION_ATTR_CONNTRACK action.
+ * @OVS_CT_ATTR_ZONE: u16 connection tracking zone.
+ */
+enum ovs_conntrack_attr {
+	OVS_CT_ATTR_UNSPEC,
+	OVS_CT_ATTR_ZONE,
+	__OVS_CT_ATTR_MAX
+};
+
+#define OVS_CT_ATTR_MAX (__OVS_CT_ATTR_MAX - 1)
+
+/**
  * enum ovs_action_attr - Action types.
  *
  * @OVS_ACTION_ATTR_OUTPUT: Output packet to port.
@@ -635,7 +647,7 @@ enum ovs_action_attr {
 				       * data immediately followed by a mask.
 				       * The data must be zero for the unmasked
 				       * bits. */
-	OVS_ACTION_ATTR_CONNTRACK,    /* u16 zone. */
+	OVS_ACTION_ATTR_CONNTRACK,    /* One nested OVS_CT_ATTR_ . */
 	__OVS_ACTION_ATTR_MAX
 };
 

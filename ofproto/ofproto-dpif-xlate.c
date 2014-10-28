@@ -3623,6 +3623,23 @@ ofpact_needs_recirculation_after_mpls(const struct xlate_ctx *ctx,
 }
 
 static void
+compose_conntrack_action(struct xlate_ctx *ctx, struct ofpact_conntrack *ofc)
+{
+    size_t ct_offset;
+    struct ofpbuf *odp_actions = ctx->xout->odp_actions;
+
+    ct_offset = nl_msg_start_nested(odp_actions, OVS_ACTION_ATTR_CONNTRACK);
+    nl_msg_put_u16(odp_actions, OVS_CT_ATTR_ZONE, ofc->zone);
+    nl_msg_end_nested(odp_actions, ct_offset);
+
+    /* xxx Need to put the recirc here. */
+    if (ofc->flags & NX_CONNTRACK_F_RECIRC) {
+        /* xxx Choose real recird id */
+        nl_msg_put_u32(ctx->xout->odp_actions, OVS_ACTION_ATTR_RECIRC, 0);
+    }
+}
+
+static void
 do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
                  struct xlate_ctx *ctx)
 {
@@ -3922,18 +3939,9 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             xlate_sample_action(ctx, ofpact_get_SAMPLE(a));
             break;
 
-        case OFPACT_CONNTRACK: {
-            struct ofpact_conntrack *ofc = ofpact_get_CONNTRACK(a);
-
-            nl_msg_put_u16(ctx->xout->odp_actions,
-                           OVS_ACTION_ATTR_CONNTRACK, ofc->zone);
-            /* xxx Need to put the recirc here. */
-            if (ofc->flags & NX_CONNTRACK_F_RECIRC) {
-                nl_msg_put_u32(ctx->xout->odp_actions, OVS_ACTION_ATTR_RECIRC,
-                               0);  /* xxx Choose real recird id */
-            }
+        case OFPACT_CONNTRACK:
+            compose_conntrack_action(ctx, ofpact_get_CONNTRACK(a));
             break;
-        }
         }
     }
 }

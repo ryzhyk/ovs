@@ -745,11 +745,12 @@ static void execute_hash(struct sk_buff *skb, struct sw_flow_key *key,
 }
 
 static int conntrack(struct sk_buff *skb, struct sw_flow_key *key,
-			uint16_t zone)
+		     const struct ovs_conntrack_info *info)
 {
 	int nh_ofs = skb_network_offset(skb);
 	struct vport *vport;
 	struct net *net;
+	struct nf_conn *ct = info->ct;
 
 	if (skb->nfct) {
 		pr_warn_once("Attempt to run through conntrack again\n");
@@ -768,6 +769,13 @@ static int conntrack(struct sk_buff *skb, struct sw_flow_key *key,
 
 	/* The conntrack module expects to be working at L3. */
 	skb_pull(skb, nh_ofs);
+
+	/* Associate skb with specified zone */
+	if (ct) {
+		atomic_inc(&ct->ct_general.use);
+		skb->nfct = &ct->ct_general;
+		skb->nfctinfo = IP_CT_NEW;
+	}
 
 	/* xxx What's the best return val? */
 	if (nf_conntrack_in(net, PF_INET, NF_INET_PRE_ROUTING, skb) != NF_ACCEPT)
@@ -956,7 +964,7 @@ static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 			break;
 
 		case OVS_ACTION_ATTR_CONNTRACK:
-			err = conntrack(skb, key, nla_get_u16(a));
+			err = conntrack(skb, key, nla_data(a));
 			break;
 		}
 

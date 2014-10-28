@@ -34,6 +34,7 @@
 
 #include <net/inet_ecn.h>
 #include <net/ip_tunnels.h>
+#include <net/netfilter/nf_conntrack.h>
 
 struct sk_buff;
 
@@ -245,6 +246,11 @@ struct arp_eth_header {
 	unsigned char       ar_tha[ETH_ALEN];	/* target hardware address  */
 	unsigned char       ar_tip[4];		/* target IP address        */
 } __packed;
+
+struct ovs_conntrack_info {
+	u16 zone;
+	struct nf_conn *ct;
+};
 
 void ovs_flow_stats_update(struct sw_flow *, __be16 tcp_flags,
 			   const struct sk_buff *);

@@ -84,7 +84,7 @@ odp_action_len(uint16_t type)
     case OVS_ACTION_ATTR_SET: return -2;
     case OVS_ACTION_ATTR_SET_MASKED: return -2;
     case OVS_ACTION_ATTR_SAMPLE: return -2;
-    case OVS_ACTION_ATTR_CONNTRACK: return sizeof(uint16_t);
+    case OVS_ACTION_ATTR_CONNTRACK: return -2;
 
     case OVS_ACTION_ATTR_UNSPEC:
     case __OVS_ACTION_ATTR_MAX:
@@ -509,6 +509,23 @@ format_odp_hash_action(struct ds *ds, const struct ovs_action_hash *hash_act)
 }
 
 static void
+format_odp_conntrack_action(struct ds *ds, const struct nlattr *attr)
+{
+    static const struct nl_policy ovs_conntrack_policy[] = {
+        [OVS_CT_ATTR_ZONE] = { .type = NL_A_U16 },
+    };
+    struct nlattr *a[ARRAY_SIZE(ovs_conntrack_policy)];
+
+    if (!nl_parse_nested(attr, ovs_conntrack_policy, a, ARRAY_SIZE(a))) {
+        ds_put_cstr(ds, "conntrack(error)");
+        return;
+    }
+
+    ds_put_format(ds, "conntrack(zone=%"PRIu16")",
+                  nl_attr_get_u16(a[OVS_CT_ATTR_ZONE]));
+}
+
+static void
 format_odp_action(struct ds *ds, const struct nlattr *a)
 {
     int expected_len;
@@ -592,8 +609,7 @@ format_odp_action(struct ds *ds, const struct nlattr *a)
         format_odp_sample_action(ds, a);
         break;
     case OVS_ACTION_ATTR_CONNTRACK: {
-        uint16_t zone = nl_attr_get_u16(a);
-        ds_put_format(ds, "conntrack(zone=%"PRIu16")", zone);
+        format_odp_conntrack_action(ds, a);
         break;
     }
     case OVS_ACTION_ATTR_UNSPEC:
