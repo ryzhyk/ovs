@@ -695,7 +695,7 @@ def main():
         for ls_name, ls in Lswitches.items():
             ls.run()
 
-        run_bfd()
+        #run_bfd()
 
         poller = ovs.poller.Poller()
         unixctl.wait(poller)
