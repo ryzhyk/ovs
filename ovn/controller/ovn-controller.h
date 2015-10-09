@@ -41,4 +41,14 @@ get_chassis_by_name(struct ovsdb_idl *ovnsb_idl, const char *chassis_id)
     return chassis_rec;
 }
 
+/* Must be ordered from most-preferred to least-preferred. */
+enum chassis_tunnel_type {
+    GENEVE = 1 << 2,
+    STT    = 1 << 1,
+    VXLAN  = 1 << 0
+};
+
+uint32_t get_tunnel_type(const char *name);
+
+
 #endif /* ovn/ovn-controller.h */

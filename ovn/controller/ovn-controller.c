@@ -57,6 +57,21 @@ OVS_NO_RETURN static void usage(void);
 
 static char *ovs_remote;
 
+uint32_t
+get_tunnel_type(const char *name)
+{
+    if (!strcmp(name, "geneve")) {
+        return GENEVE;
+    } else if (!strcmp(name, "stt")) {
+        return STT;
+    } else if (!strcmp(name, "vxlan")) {
+        return VXLAN;
+    }
+
+    VLOG_INFO("Unknown tunnel name: %s", name);
+    return 0;
+}
+
 static const struct ovsrec_bridge *
 get_bridge(struct ovsdb_idl *ovs_idl, const char *br_name)
 {

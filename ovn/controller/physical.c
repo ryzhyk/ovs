@@ -54,7 +54,7 @@ struct chassis_tunnel {
     struct hmap_node hmap_node;
     const char *chassis_id;
     ofp_port_t ofport;
-    enum chassis_tunnel_type { GENEVE, STT, VXLAN } type;
+    enum chassis_tunnel_type type;
 };
 
 static struct chassis_tunnel *
@@ -622,16 +622,17 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
 
         SBREC_PORT_BINDING_FOR_EACH (binding, ctx->ovnsb_idl) {
             struct match match = MATCH_CATCHALL_INITIALIZER;
-            match_set_in_port(&match, tun->ofport);
 
+            if (strcmp(tun->chassis_id, binding->chassis->name)) {
+                continue;
+            }
+            match_set_in_port(&match, tun->ofport);
             match_set_tun_id(&match, htonll(binding->datapath->tunnel_key));
 
             ofpbuf_clear(&ofpacts);
-
             put_move(MFF_TUN_ID, 0,  MFF_LOG_DATAPATH, 0, 24, &ofpacts);
             /* Store our tunnel port as the logical in port. */
             put_load(binding->tunnel_key, MFF_LOG_INPORT, 0, 15, &ofpacts);
-
             put_resubmit(OFTABLE_LOG_INGRESS_PIPELINE, &ofpacts);
 
             ofctrl_add_flow(flow_table, OFTABLE_PHY_TO_LOG, 100, &match,
