@@ -375,6 +375,7 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
                   [OVS_DEFINE([HAVE_NF_HOOKFN_ARG_OPS])])
 
   OVS_GREP_IFELSE([$KSRC/include/linux/random.h], [prandom_u32])
+  OVS_GREP_IFELSE([$KSRC/include/linux/random.h], [prandom_u32_max])
 
   OVS_GREP_IFELSE([$KSRC/include/net/rtnetlink.h], [get_link_net])
   OVS_GREP_IFELSE([$KSRC/include/net/rtnetlink.h], [name_assign_type])
