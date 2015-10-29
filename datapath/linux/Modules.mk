@@ -73,6 +73,7 @@ openvswitch_headers += \
 	linux/compat/include/net/genetlink.h \
 	linux/compat/include/net/geneve.h \
 	linux/compat/include/net/gre.h \
+	linux/compat/include/net/inet_ecn.h \
 	linux/compat/include/net/inet_frag.h \
 	linux/compat/include/net/ip.h \
 	linux/compat/include/net/ip_tunnels.h \
