@@ -332,6 +332,8 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/linux/etherdevice.h], [eth_hw_addr_random])
   OVS_GREP_IFELSE([$KSRC/include/linux/etherdevice.h], [ether_addr_copy])
 
+  OVS_GREP_IFELSE([$KSRC/include/linux/export.h], [EXPORT_SYMBOL])
+
   OVS_GREP_IFELSE([$KSRC/include/uapi/linux/if_link.h], [IFLA_GENEVE_TOS])
   OVS_GREP_IFELSE([$KSRC/include/uapi/linux/if_link.h], [rtnl_link_stats64])
   OVS_GREP_IFELSE([$KSRC/include/linux/if_link.h], [rtnl_link_stats64])
