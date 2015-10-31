@@ -1051,6 +1051,14 @@ nx_put_raw(struct ofpbuf *b, enum ofp_version oxm, const struct match *match,
                         htonll(flow_get_xreg(flow, i)),
                         htonll(flow_get_xreg(&match->wc.masks, i)));
         }
+#if 0
+        /* xxx Check on whether we're in the right block. */
+        for (i = 0; i < FLOW_N_XXREGS; i++) {
+            nxm_put_128m(b, MFF_XXREG0 + i, oxm,
+                         hton128(flow_get_xxreg(flow, i)),
+                         hton128(flow_get_xxreg(&match->wc.masks, i)));
+        }
+#endif
     }
 
     /* Packet mark. */
