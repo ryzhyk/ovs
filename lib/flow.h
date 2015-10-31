@@ -119,6 +119,28 @@ flow_set_xreg(struct flow *flow, int idx, uint64_t value)
     flow->regs[idx * 2 + 1] = value;
 }
 
+static inline ovs_u128
+flow_get_xxreg(const struct flow *flow, int idx)
+{
+    ovs_u128 value;
+
+    value.u32[3] = flow->regs[idx * 4];
+    value.u32[2] = flow->regs[idx * 4 + 1];
+    value.u32[1] = flow->regs[idx * 4 + 2];
+    value.u32[0] = flow->regs[idx * 4 + 3];
+
+    return value;
+}
+
+static inline void
+flow_set_xxreg(struct flow *flow, int idx, ovs_u128 value)
+{
+    flow->regs[idx * 4] = value.u32[3];
+    flow->regs[idx * 4 + 1] = value.u32[2];
+    flow->regs[idx * 4 + 2] = value.u32[1];
+    flow->regs[idx * 4 + 3] = value.u32[0];
+}
+
 static inline int
 flow_compare_3way(const struct flow *a, const struct flow *b)
 {
