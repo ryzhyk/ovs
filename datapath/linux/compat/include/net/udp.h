@@ -1,7 +1,7 @@
 #ifndef __NET_UDP_WRAPPER_H
 #define __NET_UDP_WRAPPER_H  1
 
-#include <linux/version.h>
+#include <net/ip.h>
 
 #ifdef inet_get_local_port_range
 /* RHEL7 backports udp_flow_src_port() using an older version of
