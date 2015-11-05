@@ -508,6 +508,12 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/linux/utsrelease.h], [el6],
                   [OVS_DEFINE([HAVE_RHEL6_PER_CPU])])
 
+  if test "$version" = 4 && test "$patchlevel" -le 2; then
+        OVS_DEFINE([OVS_FRAGMENT_BACKPORT])
+  elif test "$version" = 3 && test "$patchlevel" -ge 10; then
+        OVS_DEFINE([OVS_FRAGMENT_BACKPORT])
+  fi
+
   if cmp -s datapath/linux/kcompat.h.new \
             datapath/linux/kcompat.h >/dev/null 2>&1; then
     rm datapath/linux/kcompat.h.new
