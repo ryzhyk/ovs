@@ -1859,37 +1859,34 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
                 free(actions);
             }
 
-            if (op->lsp_addrs[i].n_ipv6_addrs > 0) {
-                struct ds match = DS_EMPTY_INITIALIZER;
-                ds_put_cstr(&match, "icmp6 && icmp6.type == 135 && ");
-                if (op->lsp_addrs[i].n_ipv6_addrs == 1) {
-                    ds_put_format(&match, "nd.target == %s",
-                                  op->lsp_addrs[i].ipv6_addrs[0].addr_s);
-                } else {
-                    ds_put_cstr(&match, "(");
-                    for (size_t j = 0; j < op->lsp_addrs[i].n_ipv6_addrs; j++) {
-                        ds_put_format(&match, "nd.target == %s || ",
-                                      op->lsp_addrs[i].ipv6_addrs[j].addr_s);
-                    }
-                    ds_chomp(&match, ' ');
-                    ds_chomp(&match, '|');
-                    ds_chomp(&match, '|');
-                    ds_chomp(&match, ' ');
-                    ds_put_cstr(&match, ")");
-                }
+            for (size_t j = 0; j < op->lsp_addrs[i].n_ipv6_addrs; j++) {
+                /* xxx Should learn nd_sll if "ipv6.src != ::" */
+                /* xxx Make sure this flow only matches local net */
+                /* xxx This should set the S flag (and R for router
+                 * xxx addresses in ND Ad. */
+                char *match = xasprintf(
+                        "nd_sol && ip6.dst == {%s, %s} && nd.target == %s",
+                        op->lsp_addrs[i].ipv6_addrs[j].addr_s,
+                        op->lsp_addrs[i].ipv6_addrs[j].sn_addr_s,
+                        op->lsp_addrs[i].ipv6_addrs[j].addr_s);
                 char *actions = xasprintf(
-                    "na { eth.src = %s; "
-                    "nd.tll = %s; "
-                    "outport = inport; "
-                    "inport = \"\"; /* Allow sending out inport. */ "
-                    "output; };",
-                    op->lsp_addrs[i].ea_s,
-                    op->lsp_addrs[i].ea_s);
-
+                        "nd_adv { "
+                        "eth.src = %s; "
+                        "ip6.src = %s; "
+                        "nd.target = %s; "
+                        "nd.tll = %s; "
+                        "outport = inport; "
+                        "inport = \"\"; /* Allow sending out inport. */ "
+                        "output; "
+                        "};",
+                        op->lsp_addrs[i].ea_s,
+                        op->lsp_addrs[i].ipv6_addrs[j].addr_s,
+                        op->lsp_addrs[i].ipv6_addrs[j].addr_s,
+                        op->lsp_addrs[i].ea_s);
                 ovn_lflow_add(lflows, op->od, S_SWITCH_IN_ARP_ND_RSP, 50,
-                              ds_cstr(&match), actions);
-
-                ds_destroy(&match);
+                              match, actions);
+                free(match);
+                free(actions);
             }
         }
     }
@@ -2027,28 +2024,56 @@ lrport_is_enabled(const struct nbrec_logical_router_port *lrport)
     return !lrport->enabled || *lrport->enabled;
 }
 
-/* xxx Fix terrible name */
-/* xxx next_hop_s is sometimes just an ip */
-static const struct ipv4_netaddr *
-find_lrp_network(const struct ovn_port *op, const char *next_hop_s)
+/* xxx Fix terrible name and add better description. */
+/* Return IP address of router port that overlaps with "ip_s".
+ *
+ * The caller must not free the returned string. */
+static const char *
+find_lrp_member_ip(const struct ovn_port *op, const char *ip_s)
 {
-    uint32_t next_hop;
+    bool is_ipv4 = strchr(ip_s, '.') ? true : false;
 
-    if (!ip_parse(next_hop_s, &next_hop)) {
-        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
-        VLOG_WARN_RL(&rl, "bad next hop ip address %s", next_hop_s);
-        return NULL;
-    }
+    if (is_ipv4) {
+        uint32_t ip;
 
-    for (int i = 0; i < op->lrp_networks.n_ipv4_addrs; i++) {
-        const struct ipv4_netaddr *na = &op->lrp_networks.ipv4_addrs[i];
+        if (!ip_parse(ip_s, &ip)) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
+            VLOG_WARN_RL(&rl, "bad ip address %s", ip_s);
+            return NULL;
+        }
 
-        if (!((na->network ^ next_hop) & na->mask)) {
-            /* There should be only 1 interface that matches the
-             * next hop.  Otherwise, it's a configuration error,
-             * because subnets of router's interfaces should NOT
-             * overlap. */
-            return na;
+        for (int i = 0; i < op->lrp_networks.n_ipv4_addrs; i++) {
+            const struct ipv4_netaddr *na = &op->lrp_networks.ipv4_addrs[i];
+
+            if (!((na->network ^ ip) & na->mask)) {
+                /* There should be only 1 interface that matches the
+                 * next hop.  Otherwise, it's a configuration error,
+                 * because subnets of router's interfaces should NOT
+                 * overlap. */
+                return na->addr_s;
+            }
+        }
+    } else {
+        struct in6_addr ip6;
+
+        if (!ipv6_parse(ip_s, &ip6)) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
+            VLOG_WARN_RL(&rl, "bad ipv6 address %s", ip_s);
+            return NULL;
+        }
+
+        for (int i = 0; i < op->lrp_networks.n_ipv6_addrs; i++) {
+            const struct ipv6_netaddr *na = &op->lrp_networks.ipv6_addrs[i];
+            struct in6_addr xor_addr = ipv6_addr_bitxor(na->network, ip6);
+            struct in6_addr and_addr = ipv6_addr_bitand(&xor_addr, &na->mask);
+
+            if (ipv6_is_zero(and_addr)) {
+                /* There should be only 1 interface that matches the
+                 * next hop.  Otherwise, it's a configuration error,
+                 * because subnets of router's interfaces should NOT
+                 * overlap. */
+                return na->addr_s;
+            }
         }
     }
 
@@ -2056,31 +2081,37 @@ find_lrp_network(const struct ovn_port *op, const char *next_hop_s)
 }
 
 /* xxx Fix these arguments */
+/* xxx Do we need to specify lrp_addr_s and network_s? or can they be
+ * xxx  generated based on lrp_addr_s and plen? */
 static void
 add_route(struct hmap *lflows, const struct ovn_port *op,
-          const struct ipv4_netaddr *lrp_network,
-          const char *network_s, int plen, const char *gateway)
+          const char *lrp_addr_s,
+          const char *network_s, unsigned int plen, const char *gateway)
 {
-    char *match = xasprintf("ip4.dst == %s/%d", network_s, plen);
+    bool is_ipv4 = strchr(network_s, '.') ? true : false;
+
+    char *match = xasprintf("ip%s.dst == %s/%d", is_ipv4 ? "4" : "6",
+                            network_s, plen);
 
     struct ds actions = DS_EMPTY_INITIALIZER;
-    ds_put_cstr(&actions, "ip.ttl--; reg0 = ");
+    ds_put_format(&actions, "ip.ttl--; %sreg0 = ", is_ipv4 ? "" : "xx");
+
     if (gateway) {
         ds_put_cstr(&actions, gateway);
     } else {
-        ds_put_cstr(&actions, "ip4.dst");
+        ds_put_format(&actions, "ip%s.dst", is_ipv4 ? "4" : "6");
     }
     /* xxx Update ovn-northd with changes! */
     ds_put_format(&actions,
                   "; "
-                  "reg1 = %s; "
+                  "%sreg1 = %s; "
                   "eth.src = "ETH_ADDR_FMT"; "
                   "outport = %s; "
                   /* xxx Do we always want to allow this? */
                   "inport = \"\"; /* Allow sending out inport. */ "
                   "next;",
-                  lrp_network->addr_s, ETH_ADDR_ARGS(op->mac),
-                  op->json_key);
+                  is_ipv4 ? "" : "xx",
+                  lrp_addr_s, ETH_ADDR_ARGS(op->mac), op->json_key);
 
     /* The priority here is calculated to implement longest-prefix-match
      * routing. */
@@ -2096,7 +2127,9 @@ build_static_route_flow(struct hmap *lflows, struct ovn_datapath *od,
                         const struct nbrec_logical_router_static_route *route)
 {
     ovs_be32 prefix, next_hop, mask;
-    const struct ipv4_netaddr *lrp_network;
+    const char *lrp_addr_s;
+
+    /* xxx Add support for IPv6 */
 
     /* Verify that next hop is an IP address with 32 bits mask. */
     char *error = ip_parse_masked(route->nexthop, &next_hop, &mask);
@@ -2128,7 +2161,7 @@ build_static_route_flow(struct hmap *lflows, struct ovn_datapath *od,
                          route->output_port, route->ip_prefix);
             return;
         }
-        lrp_network = find_lrp_network(out_port, route->nexthop);
+        lrp_addr_s = find_lrp_member_ip(out_port, route->nexthop);
     } else {
         /* output_port is not specified, find the
          * router port matching the next hop. */
@@ -2141,14 +2174,14 @@ build_static_route_flow(struct hmap *lflows, struct ovn_datapath *od,
                 continue;
             }
 
-            lrp_network = find_lrp_network(out_port, route->nexthop);
-            if (lrp_network) {
+            lrp_addr_s = find_lrp_member_ip(out_port, route->nexthop);
+            if (lrp_addr_s) {
                 break;
             }
         }
     }
 
-     if (!lrp_network) {
+     if (!lrp_addr_s) {
         /* There is no matched out port. */
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
         VLOG_WARN_RL(&rl, "No path for static route %s; next hop %s",
@@ -2157,15 +2190,18 @@ build_static_route_flow(struct hmap *lflows, struct ovn_datapath *od,
     }
 
     /* xxx Use consistent "next_hop" and "route->nexthop". */
+    /* xxx This won't work for ipv6 */
     char *prefix_s = xasprintf(IP_FMT, IP_ARGS(prefix & mask));
-    add_route(lflows, out_port, lrp_network, prefix_s,
+    add_route(lflows, out_port, lrp_addr_s, prefix_s,
               ip_count_cidr_bits(mask), route->nexthop);
     free(prefix_s);
 }
 
 static void
-op_put_networks(struct ds *ds, const struct ovn_port *op, bool add_bcast)
+op_put_v4_networks(struct ds *ds, const struct ovn_port *op, bool add_bcast)
 {
+    /* xxx Is broadcast something that wee need to allow?  If not, we
+     * xxx can more easily handle merge with op_put_v6_networks. */
     if (!add_bcast && op->lrp_networks.n_ipv4_addrs == 1) {
         ds_put_format(ds, "%s", op->lrp_networks.ipv4_addrs[0].addr_s);
         return;
@@ -2177,6 +2213,23 @@ op_put_networks(struct ds *ds, const struct ovn_port *op, bool add_bcast)
         if (add_bcast) {
             ds_put_format(ds, "%s, ", op->lrp_networks.ipv4_addrs[i].bcast_s);
         }
+    }
+    ds_chomp(ds, ' ');
+    ds_chomp(ds, ',');
+    ds_put_cstr(ds, "}");
+}
+
+static void
+op_put_v6_networks(struct ds *ds, const struct ovn_port *op)
+{
+    if (op->lrp_networks.n_ipv6_addrs == 1) {
+        ds_put_format(ds, "%s", op->lrp_networks.ipv6_addrs[0].addr_s);
+        return;
+    }
+
+    ds_put_cstr(ds, "{");
+    for (int i = 0; i < op->lrp_networks.n_ipv6_addrs; i++) {
+        ds_put_format(ds, "%s, ", op->lrp_networks.ipv6_addrs[i].addr_s);
     }
     ds_chomp(ds, ' ');
     ds_chomp(ds, ',');
@@ -2242,10 +2295,14 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                       "ip4.dst == 0.0.0.0/8",
                       "drop;");
 
+        /* xxx Add IPv6 stuff. */
+
         /* ARP reply handling.  Use ARP replies to populate the logical
          * router's ARP table. */
         ovn_lflow_add(lflows, od, S_ROUTER_IN_IP_INPUT, 90, "arp.op == 2",
                       "put_arp(inport, arp.spa, arp.sha);");
+
+        /* xxx Add IPv6 admission control. */
 
         /* Drop Ethernet local broadcast.  By definition this traffic should
          * not be forwarded.*/
@@ -2273,12 +2330,15 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
             continue;
         }
 
-        /* L3 admission control: drop packets that originate from an IP address
-         * owned by the router or a broadcast address known to the router
-         * (priority 100). */
+        /* *** IPv4 *** */
+
+        /* L3 admission control: drop packets that originate from an
+         * IPv4 address owned by the router or a broadcast address
+         * known to the router (priority 100). */
         struct ds match = DS_EMPTY_INITIALIZER;
+        struct ds actions = DS_EMPTY_INITIALIZER;
         ds_put_cstr(&match, "ip4.src == ");
-        op_put_networks(&match, op, true);
+        op_put_v4_networks(&match, op, true);
         ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_INPUT, 100,
                       ds_cstr(&match), "drop;");
 
@@ -2288,46 +2348,47 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
          * (i.e. the incoming locally attached net) does not matter.
          * The ip.ttl also does not matter (RFC1812 section 4.2.2.9) */
         ds_clear(&match);
+        ds_clear(&actions);
         /* xxx Make a separate commit about disabling responding to
          * xxx broadcast due to smurf attacks. */
         ds_put_cstr(&match, "ip4.dst == ");
-        op_put_networks(&match, op, false);
+        op_put_v4_networks(&match, op, false);
         ds_put_cstr(&match, " && icmp4.type == 8 && icmp4.code == 0");
-        char *actions = xasprintf(
-            "ip4.dst <-> ip4.src; " /* xxx Is this swap same as old behavior? */
-            "ip.ttl = 255; "
-            "icmp4.type = 0; "
-            "inport = \"\"; /* Allow sending out inport. */ "
-            "next; ");
+        ds_put_cstr(&actions,
+                    "ip4.dst <-> ip4.src; " /* xxx Is this swap same as old
+                                             * xxx behavior? */
+                    "ip.ttl = 255; "
+                    "icmp4.type = 0; "
+                    "inport = \"\"; /* Allow sending out inport. */ "
+                    "next; ");
         ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_INPUT, 90,
-                      ds_cstr(&match), actions);
-        free(actions);
+                      ds_cstr(&match), ds_cstr(&actions));
 
         /* ARP reply.  These flows reply to ARP requests for the router's own
          * IP address. */
         for (int i = 0; i < op->lrp_networks.n_ipv4_addrs; i++) {
             ds_clear(&match);
+            ds_clear(&actions);
             ds_put_format(&match,
                           "inport == %s && arp.tpa == %s && arp.op == 1",
                           op->json_key, op->lrp_networks.ipv4_addrs[i].addr_s);
-            actions = xasprintf(
-                "eth.dst = eth.src; "
-                "eth.src = "ETH_ADDR_FMT"; "
-                "arp.op = 2; /* ARP reply */ "
-                "arp.tha = arp.sha; "
-                "arp.sha = "ETH_ADDR_FMT"; "
-                "arp.tpa = arp.spa; "
-                "arp.spa = %s; "
-                "outport = %s; "
-                "inport = \"\"; /* Allow sending out inport. */ "
-                "output;",
-                ETH_ADDR_ARGS(op->mac),
-                ETH_ADDR_ARGS(op->mac),
-                op->lrp_networks.ipv4_addrs[i].addr_s,
-                op->json_key);
+            ds_put_format(&actions,
+                          "eth.dst = eth.src; "
+                          "eth.src = "ETH_ADDR_FMT"; "
+                          "arp.op = 2; /* ARP reply */ "
+                          "arp.tha = arp.sha; "
+                          "arp.sha = "ETH_ADDR_FMT"; "
+                          "arp.tpa = arp.spa; "
+                          "arp.spa = %s; "
+                          "outport = %s; "
+                          "inport = \"\"; /* Allow sending out inport. */ "
+                          "output;",
+                          ETH_ADDR_ARGS(op->mac),
+                          ETH_ADDR_ARGS(op->mac),
+                          op->lrp_networks.ipv4_addrs[i].addr_s,
+                          op->json_key);
             ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_INPUT, 90,
-                          ds_cstr(&match), actions);
-            free(actions);
+                          ds_cstr(&match), ds_cstr(&actions));
         }
 
         /* ARP handling for external IP addresses.
@@ -2356,7 +2417,7 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
             ds_put_format(&match,
                   "inport == %s && arp.tpa == "IP_FMT" && arp.op == 1",
                   op->json_key, IP_ARGS(ip));
-            actions = xasprintf(
+            ds_put_format(&actions,
                 "eth.dst = eth.src; "
                 "eth.src = "ETH_ADDR_FMT"; "
                 "arp.op = 2; /* ARP reply */ "
@@ -2372,8 +2433,7 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                 IP_ARGS(ip),
                 op->json_key);
             ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_INPUT, 90,
-                          ds_cstr(&match), actions);
-            free(actions);
+                          ds_cstr(&match), ds_cstr(&actions));
         }
 
         /* Drop IP traffic to this router, unless the router ip is used as
@@ -2423,9 +2483,81 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
             ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_INPUT, 60,
                           ds_cstr(&match), "drop;");
         }
+        free(nat_ips);
+
+
+        /* *** IPv6 *** */
+
+        if (op->lrp_networks.n_ipv6_addrs) {
+            /* L3 admission control: drop packets that originate from an
+             * IPv6 address owned by the router or a broadcast address
+             * known to the router (priority 100). */
+            ds_clear(&match);
+            ds_put_cstr(&match, "ip6.src == ");
+            op_put_v6_networks(&match, op);
+            ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_INPUT, 100,
+                          ds_cstr(&match), "drop;");
+
+            /* ICMPv6 echo reply.  These flows reply to echo requests
+             * received for the router's IP address. */
+            ds_clear(&match);
+            ds_clear(&actions);
+            ds_put_cstr(&match, "ip6.dst == ");
+            /* xxx Add support for responding to multicast and anycast */
+            op_put_v6_networks(&match, op);
+            ds_put_cstr(&match, " && icmp6.type == 128 && icmp6.code == 0");
+            ds_put_cstr(&actions,
+                        "ip6.dst <-> ip6.src; "
+                        "ip.ttl = 255; "
+                        "icmp6.type = 129; "
+                        "inport = \"\"; /* Allow sending out inport. */ "
+                        "next; ");
+            ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_INPUT, 90,
+                          ds_cstr(&match), ds_cstr(&actions));
+
+            /* Drop IPv6 traffic to this router. */
+            ds_clear(&match);
+            ds_put_cstr(&match, "ip6.dst == ");
+            /* xxx This won't work.  Need sep v4 and v6 networks. */
+            op_put_v6_networks(&match, op);
+            ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_INPUT, 60,
+                          ds_cstr(&match), "drop;");
+        }
+
+        for (int i = 0; i < op->lrp_networks.n_ipv6_addrs; i++) {
+            ds_clear(&match);
+            ds_clear(&actions);
+
+            /* xxx Should learn nd_sll if "ipv6.src != ::" */
+            /* xxx Make sure this flow only matches local net */
+            /* xxx This should set the S and R flags for router
+             * xxx addresses in ND Ad. */
+            ds_put_format(&match,
+                    "nd_sol && ip6.dst == {%s, %s} && nd.target == %s",
+                    op->lrp_networks.ipv6_addrs[i].addr_s,
+                    op->lrp_networks.ipv6_addrs[i].sn_addr_s,
+                    op->lrp_networks.ipv6_addrs[i].addr_s);
+            /* Is it safe to add nd.tll, since packet shorter? */
+            ds_put_format(&actions,
+                          "nd_adv { "
+                          "eth.src = %s; "
+                          "ip6.src = %s; "
+                          "nd.target = %s; "
+                          "nd.tll = %s; "
+                          "outport = inport; "
+                          "inport = \"\"; /* Allow sending out inport. */ "
+                          "output; "
+                          "};",
+                          op->lrp_networks.ea_s,
+                          op->lrp_networks.ipv6_addrs[i].addr_s,
+                          op->lrp_networks.ipv6_addrs[i].addr_s,
+                          op->lrp_networks.ea_s);
+            ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_INPUT, 90,
+                          ds_cstr(&match), ds_cstr(&actions));
+        }
 
         ds_destroy(&match);
-        free(nat_ips);
+        ds_destroy(&actions);
     }
 
     /* NAT in Gateway routers. */
@@ -2570,9 +2702,15 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
         }
 
         for (int i = 0; i < op->lrp_networks.n_ipv4_addrs; i++) {
-            add_route(lflows, op, &op->lrp_networks.ipv4_addrs[i],
+            add_route(lflows, op, op->lrp_networks.ipv4_addrs[i].addr_s,
                       op->lrp_networks.ipv4_addrs[i].network_s,
                       op->lrp_networks.ipv4_addrs[i].plen, NULL);
+        }
+
+        for (int i = 0; i < op->lrp_networks.n_ipv6_addrs; i++) {
+            add_route(lflows, op, op->lrp_networks.ipv6_addrs[i].addr_s,
+                      op->lrp_networks.ipv6_addrs[i].network_s,
+                      op->lrp_networks.ipv6_addrs[i].plen, NULL);
         }
     }
 
@@ -2613,15 +2751,28 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                 }
 
                 struct ds match = DS_EMPTY_INITIALIZER;
+                struct ds actions = DS_EMPTY_INITIALIZER;
                 ds_put_format(&match, "outport == %s && reg0 == ",
                               peer->json_key);
-                op_put_networks(&match, op, false);
-                char *actions = xasprintf("eth.dst = "ETH_ADDR_FMT"; "
-                                          "next;", ETH_ADDR_ARGS(op->mac));
+                op_put_v4_networks(&match, op, false);
+                ds_put_format(&actions, "eth.dst = "ETH_ADDR_FMT"; "
+                                        "next;", ETH_ADDR_ARGS(op->mac));
                 ovn_lflow_add(lflows, peer->od, S_ROUTER_IN_ARP_RESOLVE,
-                              100, ds_cstr(&match), actions);
-                free(actions);
+                              100, ds_cstr(&match), ds_cstr(&actions));
+
+                if (op->lrp_networks.n_ipv6_addrs) {
+                    ds_clear(&match);
+                    ds_clear(&actions);
+                    ds_put_format(&match, "outport == %s && xxreg0 == ",
+                                  peer->json_key);
+                    op_put_v6_networks(&match, op);
+                    ds_put_format(&actions, "eth.dst = "ETH_ADDR_FMT"; "
+                                  "next;", ETH_ADDR_ARGS(op->mac));
+                    ovn_lflow_add(lflows, peer->od, S_ROUTER_IN_ARP_RESOLVE,
+                                  100, ds_cstr(&match), ds_cstr(&actions));
+                }
                 ds_destroy(&match);
+                ds_destroy(&actions);
             }
         } else if (op->od->n_router_ports && strcmp(op->nbs->type, "router")) {
             /* xxx Do we still need to check if this contains a router
@@ -2652,13 +2803,47 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                             continue;
                         }
 
-                        const struct ipv4_netaddr *v4_net
-                            = find_lrp_network(peer, ip_s);
-                        if (!v4_net) {
+                        if (!find_lrp_member_ip(peer, ip_s)) {
                             continue;
                         }
 
                         char *match = xasprintf("outport == %s && reg0 == %s",
+                                                peer->json_key,
+                                                ip_s);
+                        char *actions = xasprintf("eth.dst = %s; next;", ea_s);
+                        ovn_lflow_add(lflows, peer->od,
+                                      S_ROUTER_IN_ARP_RESOLVE,
+                                      100, match, actions);
+                        free(actions);
+                        free(match);
+                    }
+                }
+
+                for (size_t j = 0; j < op->lsp_addrs[i].n_ipv6_addrs; j++) {
+                    const char *ip_s = op->lsp_addrs[i].ipv6_addrs[j].addr_s;
+                    for (size_t k = 0; k < op->od->n_router_ports; k++) {
+                        /* Get the Logical_Router_Port that the
+                         * Logical_Switch_Port is connected to, as
+                         * 'peer'. */
+                        const char *peer_name = smap_get(
+                            &op->od->router_ports[k]->nbs->options,
+                            "router-port");
+                        if (!peer_name) {
+                            continue;
+                        }
+
+                        struct ovn_port *peer = ovn_port_find(ports, peer_name);
+                        if (!peer || !peer->nbr) {
+                            continue;
+                        }
+
+                        /* xxx Do we want to create a special IPv6
+                         * xxx version so we don't reparse the string? */
+                        if (!find_lrp_member_ip(peer, ip_s)) {
+                            continue;
+                        }
+
+                        char *match = xasprintf("outport == %s && xxreg0 == %s",
                                                 peer->json_key,
                                                 ip_s);
                         char *actions = xasprintf("eth.dst = %s; next;", ea_s);
@@ -2705,15 +2890,28 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                 }
 
                 struct ds match = DS_EMPTY_INITIALIZER;
+                struct ds actions = DS_EMPTY_INITIALIZER;
                 ds_put_format(&match, "outport == %s && reg0 == ",
                               peer->json_key);
-                op_put_networks(&match, router_port, false);
-                char *actions = xasprintf("eth.dst = %s; next;",
+                op_put_v4_networks(&match, router_port, false);
+                ds_put_format(&actions, "eth.dst = %s; next;",
                                           router_port->lrp_networks.ea_s);
                 ovn_lflow_add(lflows, peer->od, S_ROUTER_IN_ARP_RESOLVE,
-                              100, ds_cstr(&match), actions);
+                              100, ds_cstr(&match), ds_cstr(&actions));
+
+                if (op->lrp_networks.n_ipv6_addrs) {
+                    ds_clear(&match);
+                    ds_clear(&actions);
+                    ds_put_format(&match, "outport == %s && xxreg0 == ",
+                                  peer->json_key);
+                    op_put_v6_networks(&match, router_port);
+                    ds_put_format(&actions, "eth.dst = %s; next;",
+                                  router_port->lrp_networks.ea_s);
+                    ovn_lflow_add(lflows, peer->od, S_ROUTER_IN_ARP_RESOLVE,
+                                  100, ds_cstr(&match), ds_cstr(&actions));
+                }
                 ds_destroy(&match);
-                free(actions);
+                ds_destroy(&actions);
             }
         }
     }
@@ -2737,6 +2935,7 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
             continue;
         }
 
+        /* xxx Doesn't the comment describe the opposite priorities? */
         ovn_lflow_add(lflows, od, S_ROUTER_IN_ARP_REQUEST, 100,
                       "eth.dst == 00:00:00:00:00:00",
                       "arp { "
