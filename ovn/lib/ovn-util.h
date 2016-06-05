@@ -18,6 +18,7 @@
 
 #include "lib/packets.h"
 
+struct nbrec_logical_router_port;
 struct sbrec_port_binding;
 
 struct ipv4_netaddr {
@@ -52,6 +53,8 @@ struct lport_addresses {
 
 
 bool extract_lsp_addresses(char *address, struct lport_addresses *);
+bool extract_lrp_networks(const struct nbrec_logical_router_port *,
+                          struct lport_addresses *);
 void destroy_lport_addresses(struct lport_addresses *);
 
 char *alloc_nat_zone_key(const struct sbrec_port_binding *port_binding,

@@ -340,10 +340,13 @@ Logical router commands:\n\
   lr-list                   print the names of all logical routers\n\
 \n\
 Logical router port commands:\n\
-  lrp-add ROUTER PORT MAC NETWORK [PEER]\n\
+  lrp-add ROUTER PORT MAC [PEER]\n\
                             add logical port PORT on ROUTER\n\
   lrp-del PORT              delete PORT from its attached router\n\
   lrp-list ROUTER           print the names of all ports on ROUTER\n\
+  lrp-set-networks PORT [NETWORK]...\n\
+                            set networks for PORT.\n\
+  lrp-get-networks PORT     get a list of networks on PORT\n\
   lrp-set-enabled PORT STATE\n\
                             set administrative state PORT\n\
                             ('enabled' or 'disabled')\n\
@@ -1531,8 +1534,22 @@ nbctl_lrp_add(struct ctl_context *ctx)
 
     const char *lrp_name = ctx->argv[2];
     const char *mac = ctx->argv[3];
-    const char *network = ctx->argv[4];
-    const char *peer = (ctx->argc == 6) ? ctx->argv[5] : NULL;
+    const char **networks = (const char **) &ctx->argv[4];
+
+    int n_networks = ctx->argc - 4;
+    for (int i = 4; i < ctx->argc; i++) {
+        if (strchr(ctx->argv[i], '=')) {
+            n_networks = i - 4;
+            break;
+        }
+    }
+
+    if (!n_networks) {
+        ctl_fatal("%s: router port requires specifying a network", lrp_name);
+    }
+
+    char **settings = (char **) &ctx->argv[n_networks + 4];
+    int n_settings = ctx->argc - 4 - n_networks;
 
     const struct nbrec_logical_router_port *lrp;
     lrp = lrp_by_name_or_uuid(ctx, lrp_name, false);
@@ -1555,35 +1572,44 @@ nbctl_lrp_add(struct ctl_context *ctx)
                       lrp->mac);
         }
 
+#if 0
+        /* xxx Need to compare these */
         if (strcmp(network, lrp->network)) {
             ctl_fatal("%s: port already exists with network %s", lrp_name,
                       lrp->network);
         }
+#endif
 
+#if 0
+        /* xxx Verify peer by parsing settings. */
         if ((!peer != !lrp->peer) ||
                 (lrp->peer && strcmp(peer, lrp->peer))) {
             ctl_fatal("%s: port already exists with mismatching peer",
                       lrp_name);
         }
+#endif
 
         return;
     }
 
     struct eth_addr ea;
     if (!ovs_scan(mac, ETH_ADDR_SCAN_FMT, ETH_ADDR_SCAN_ARGS(ea))) {
-        ctl_fatal("%s: invalid mac address.", mac);
+        ctl_fatal("%s: invalid mac address %s", lrp_name, mac);
     }
 
-    ovs_be32 ipv4;
-    unsigned int plen;
-    char *error = ip_parse_cidr(network, &ipv4, &plen);
-    if (error) {
-        free(error);
-        struct in6_addr ipv6;
-        error = ipv6_parse_cidr(network, &ipv6, &plen);
+    for (int i = 0; i < n_networks; i++) {
+        ovs_be32 ipv4;
+        unsigned int plen;
+        char *error = ip_parse_cidr(networks[i], &ipv4, &plen);
         if (error) {
             free(error);
-            ctl_fatal("%s: invalid network address.", network);
+            struct in6_addr ipv6;
+            error = ipv6_parse_cidr(networks[i], &ipv6, &plen);
+            if (error) {
+                free(error);
+                ctl_fatal("%s: invalid network address: %s", lrp_name,
+                          networks[i]);
+            }
         }
     }
 
@@ -1591,10 +1617,13 @@ nbctl_lrp_add(struct ctl_context *ctx)
     lrp = nbrec_logical_router_port_insert(ctx->txn);
     nbrec_logical_router_port_set_name(lrp, lrp_name);
     nbrec_logical_router_port_set_mac(lrp, mac);
-    nbrec_logical_router_port_set_network(lrp, network);
-    if (peer) {
-        nbrec_logical_router_port_set_peer(lrp, peer);
+    nbrec_logical_router_port_set_networks(lrp, networks, n_networks);
+
+    for (int i = 0; i < n_settings; i++) {
+        ctl_set_column("Logical_Router_Port", &lrp->header_, settings[i],
+                       ctx->symtab);
     }
+
 
     /* Insert the logical port into the logical router. */
     nbrec_logical_router_verify_ports(lr);
@@ -2128,9 +2157,10 @@ static const struct ctl_command_syntax nbctl_commands[] = {
     { "lr-list", 0, 0, "", NULL, nbctl_lr_list, NULL, "", RO },
 
     /* logical router port commands. */
-    { "lrp-add", 4, 5, "ROUTER PORT MAC NETWORK [PEER]", NULL, nbctl_lrp_add,
-      NULL, "--may-exist", RW },
-    { "lrp-del", 1, 1, "LPORT", NULL, nbctl_lrp_del, NULL, "--if-exists", RW },
+    { "lrp-add", 3, INT_MAX,
+      "ROUTER PORT MAC NETWORK... [COLUMN[:KEY]=VALUE]...",
+      NULL, nbctl_lrp_add, NULL, "--may-exist", RW },
+    { "lrp-del", 1, 1, "PORT", NULL, nbctl_lrp_del, NULL, "--if-exists", RW },
     { "lrp-list", 1, 1, "ROUTER", NULL, nbctl_lrp_list, NULL, "", RO },
     { "lrp-set-enabled", 2, 2, "PORT STATE", NULL, nbctl_lrp_set_enabled,
       NULL, "", RW },
