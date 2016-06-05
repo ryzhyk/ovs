@@ -290,7 +290,7 @@
     <h1>Logical Router Port Commands</h1>
 
     <dl>
-      <dt>[<code>--may-exist</code>] <code>lrp-add</code> <var>router</var> <var>port</var> <var>mac</var> <var>network</var> [<var>peer</var>]</dt>
+      <dt>[<code>--may-exist</code>] <code>lrp-add</code> <var>router</var> <var>port</var> <var>mac</var> <var>network</var> [<var>column</var>[<code>:</code><var>key</var>]<code>=</code><var>value</var>]...</dt>
       <dd>
         <p>
           Creates on <var>router</var> a new logical router port named
@@ -298,6 +298,15 @@
           address/netmask <var>network</var>.  If <var>peer</var> is
           specified, it identifies a logical router port that connects
           to this one.
+        </p>
+
+        <p>
+          Optional arguments set values of column in the <ref
+          table="Logical_Router_Port"/> record created by the command.
+          For example, <code>peer=lr1</code> would set the peer router
+          port to be <code>lr1</code>.  The syntax is the same as that
+          for the <code>set</code> command (see <code>Database
+          Commands</code> below).
         </p>
 
         <p>
