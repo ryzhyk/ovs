@@ -215,6 +215,99 @@ exit:
     ofpbuf_uninit(&ofpacts);
 }
 
+/* xxx Merge common functionality with arp and nd_adv. */
+static void
+pinctrl_handle_nd_adv(const struct flow *ip_flow, const struct match *md,
+                      struct ofpbuf *userdata)
+{
+    /* This action only works for IPv6 packets, and the switch should only send
+     * us IPv6 packets this way, but check here just to be sure. */
+    if (ip_flow->dl_type != htons(ETH_TYPE_IPV6)) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+        VLOG_WARN_RL(&rl,
+                     "nd_adv action on non-IP packet (Ethertype %"PRIx16")",
+                     ntohs(ip_flow->dl_type));
+        return;
+    }
+
+    /* Compose a neighbor discovery advertisement packet. */
+    struct dp_packet packet;
+    dp_packet_init(&packet, 0);
+
+    compose_nd_adv(&packet, ip_flow->dl_dst, ip_flow->dl_src,
+                   &ip_flow->ipv6_dst, &ip_flow->ipv6_src);
+
+    if (ip_flow->vlan_tci & htons(VLAN_CFI)) {
+        eth_push_vlan(&packet, htons(ETH_TYPE_VLAN_8021Q), ip_flow->vlan_tci);
+    }
+
+    /* Compose actions.
+     *
+     * First, copy metadata from 'md' into the packet-out via "set_field"
+     * actions, then add actions from 'userdata'.
+     */
+    uint64_t ofpacts_stub[4096 / 8];
+    struct ofpbuf ofpacts = OFPBUF_STUB_INITIALIZER(ofpacts_stub);
+    enum ofp_version version = rconn_get_version(swconn);
+
+    enum mf_field_id md_fields[] = {
+#if FLOW_N_REGS == 16
+        MFF_REG0,
+        MFF_REG1,
+        MFF_REG2,
+        MFF_REG3,
+        MFF_REG4,
+        MFF_REG5,
+        MFF_REG6,
+        MFF_REG7,
+        MFF_REG8,
+        MFF_REG9,
+        MFF_REG10,
+        MFF_REG11,
+        MFF_REG12,
+        MFF_REG13,
+        MFF_REG14,
+        MFF_REG15,
+#else
+#error
+#endif
+        MFF_METADATA,
+    };
+    for (size_t i = 0; i < ARRAY_SIZE(md_fields); i++) {
+        const struct mf_field *field = mf_from_id(md_fields[i]);
+        if (!mf_is_all_wild(field, &md->wc)) {
+            struct ofpact_set_field *sf = ofpact_put_SET_FIELD(&ofpacts);
+            sf->field = field;
+            sf->flow_has_vlan = false;
+            mf_get_value(field, &md->flow, &sf->value);
+            memset(&sf->mask, 0xff, field->n_bytes);
+        }
+    }
+    enum ofperr error = ofpacts_pull_openflow_actions(userdata, userdata->size,
+                                                      version, &ofpacts);
+    if (error) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+        VLOG_WARN_RL(&rl, "failed to parse nd_adv actions (%s)",
+                     ofperr_to_string(error));
+        goto exit;
+    }
+
+    struct ofputil_packet_out po = {
+        .packet = dp_packet_data(&packet),
+        .packet_len = dp_packet_size(&packet),
+        .buffer_id = UINT32_MAX,
+        .in_port = OFPP_CONTROLLER,
+        .ofpacts = ofpacts.data,
+        .ofpacts_len = ofpacts.size,
+    };
+    enum ofputil_protocol proto = ofputil_protocol_from_ofp_version(version);
+    queue_msg(ofputil_encode_packet_out(&po, proto));
+
+exit:
+    dp_packet_uninit(&packet);
+    ofpbuf_uninit(&ofpacts);
+}
+
 static void
 pinctrl_handle_put_dhcp_opts(
     struct dp_packet *pkt_in, struct ofputil_packet_in *pin,
@@ -434,6 +527,10 @@ process_packet_in(const struct ofp_header *msg)
 
     case ACTION_OPCODE_PUT_DHCP_OPTS:
         pinctrl_handle_put_dhcp_opts(&packet, &pin, &userdata, &continuation);
+        break;
+
+    case ACTION_OPCODE_ND_ADV:
+        pinctrl_handle_nd_adv(&headers, &pin.flow_metadata, &userdata);
         break;
 
     default:

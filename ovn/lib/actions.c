@@ -247,7 +247,8 @@ put_controller_op(struct ofpbuf *ofpacts, enum action_opcode opcode)
 }
 
 static void
-parse_arp_action(struct action_context *ctx)
+parse_pkt_gen_action(struct action_context *ctx, enum action_opcode opcode,
+                     const char *prereq)
 {
     if (!lexer_match(ctx->lexer, LEX_T_LCURLY)) {
         action_syntax_error(ctx, "expecting `{'");
@@ -272,13 +273,12 @@ parse_arp_action(struct action_context *ctx)
 
     ctx->ofpacts = outer_ofpacts;
 
-    /* Add a "controller" action with the actions nested inside "arp {...}",
-     * converted to OpenFlow, as its userdata.  ovn-controller will convert the
-     * packet to an ARP and then send the packet and actions back to the switch
-     * inside an OFPT_PACKET_OUT message. */
-    /* controller. */
-    size_t oc_offset = start_controller_op(ctx->ofpacts, ACTION_OPCODE_ARP,
-                                           false);
+    /* Add a "controller" OpenFlow action with the actions nested inside the
+     * requested OVN action's "{...}", converted to OpenFlow, as its userdata.
+     * ovn-controller will convert the packet to the requested type and
+     * then send the packet and actions back to the switch inside an
+     * OFPT_PACKET_OUT message. */
+    size_t oc_offset = start_controller_op(ctx->ofpacts, opcode, false);
     ofpacts_put_openflow_actions(inner_ofpacts.data, inner_ofpacts.size,
                                  ctx->ofpacts, OFP13_VERSION);
     finish_controller_op(ctx->ofpacts, oc_offset);
@@ -286,10 +286,22 @@ parse_arp_action(struct action_context *ctx)
     /* Restore prerequisites. */
     expr_destroy(ctx->prereqs);
     ctx->prereqs = outer_prereqs;
-    add_prerequisite(ctx, "ip4");
+    add_prerequisite(ctx, prereq);
 
     /* Free memory. */
     ofpbuf_uninit(&inner_ofpacts);
+}
+
+static void
+parse_arp_action(struct action_context *ctx)
+{
+    parse_pkt_gen_action(ctx, ACTION_OPCODE_ARP, "ip4");
+}
+
+static void
+parse_nd_adv_action(struct action_context *ctx)
+{
+    parse_pkt_gen_action(ctx, ACTION_OPCODE_ND_ADV, "nd_sol");
 }
 
 static bool
@@ -768,6 +780,8 @@ parse_action(struct action_context *ctx)
         parse_get_arp_action(ctx);
     } else if (lexer_match_id(ctx->lexer, "put_arp")) {
         parse_put_arp_action(ctx);
+    } else if (lexer_match_id(ctx->lexer, "nd_adv")) {
+        parse_nd_adv_action(ctx);
     } else {
         action_syntax_error(ctx, "expecting action");
     }

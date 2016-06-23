@@ -54,6 +54,12 @@ enum action_opcode {
      *   - Any number of DHCP options.
      */
     ACTION_OPCODE_PUT_DHCP_OPTS,
+
+    /* "nd_adv { ...actions... }".
+     *
+     * The actions, in OpenFlow 1.3 format, follow the action_header.
+     */
+    ACTION_OPCODE_ND_ADV,
 };
 
 /* Header. */
