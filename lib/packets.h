@@ -1027,6 +1027,9 @@ void ipv6_format_masked(const struct in6_addr *addr,
 const char * ipv6_string_mapped(char *addr_str, const struct in6_addr *addr);
 struct in6_addr ipv6_addr_bitand(const struct in6_addr *src,
                                  const struct in6_addr *mask);
+struct in6_addr ipv6_addr_bitxor(const struct in6_addr a,
+                                 const struct in6_addr b);
+bool ipv6_is_zero(const struct in6_addr a);
 struct in6_addr ipv6_create_mask(int mask);
 int ipv6_count_cidr_bits(const struct in6_addr *netmask);
 bool ipv6_is_cidr(const struct in6_addr *netmask);
@@ -1069,11 +1072,18 @@ void compose_arp(struct dp_packet *, uint16_t arp_op,
                  ovs_be32 arp_spa, ovs_be32 arp_tpa);
 void compose_nd(struct dp_packet *, const struct eth_addr eth_src,
                 struct in6_addr *, struct in6_addr *);
-void compose_na(struct dp_packet *,
-                const struct eth_addr eth_src, const struct eth_addr eth_dst,
-                const ovs_be32 ipv6_src[4], const ovs_be32 ipv6_dst[4],
-                ovs_be32 rco_flags);
+void compose_nd_adv(struct dp_packet *b, const struct eth_addr eth_src,
+                    const struct eth_addr eth_dst,
+                    const struct in6_addr *ipv6_src,
+                    const struct in6_addr *ipv6_dst,
+                    ovs_be32 rco_flags);
 uint32_t packet_csum_pseudoheader(const struct ip_header *);
 void IP_ECN_set_ce(struct dp_packet *pkt, bool is_ipv6);
+
+/* xxx Hack */
+void *
+compose_ipv6(struct dp_packet *packet, uint8_t proto, const ovs_be32 src[4],
+             const ovs_be32 dst[4], uint8_t key_tc, ovs_be32 key_fl,
+             uint8_t key_hl, int size);
 
 #endif /* packets.h */

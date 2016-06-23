@@ -944,6 +944,7 @@ reload_metadata(struct ofpbuf *ofpacts, const struct match *md)
     }
 }
 
+/* xxx Rename this handle nd_adv */
 static void
 pinctrl_handle_na(const struct flow *ip_flow,
                   const struct match *md,
@@ -964,15 +965,11 @@ pinctrl_handle_na(const struct flow *ip_flow,
     struct dp_packet packet;
     dp_packet_use_stub(&packet, packet_stub, sizeof packet_stub);
 
-    ovs_be32 ipv6_src[4], ipv6_dst[4];
-    memcpy(ipv6_dst, &ip_flow->ipv6_src, sizeof ipv6_src);
-    memcpy(ipv6_src, &ip_flow->nd_target, sizeof ipv6_dst);
-
     /* Frame the NA packet with RSO=011. */
-    compose_na(&packet,
-               ip_flow->dl_dst, ip_flow->dl_src,
-               ipv6_src, ipv6_dst,
-               htonl(0x60000000));
+    compose_nd_adv(&packet,
+                   ip_flow->dl_dst, ip_flow->dl_src,
+                   &ip_flow->nd_target, &ip_flow->ipv6_src,
+                   htonl(0x60000000));
 
     /* Reload previous packet metadata. */
     uint64_t ofpacts_stub[4096 / 8];
