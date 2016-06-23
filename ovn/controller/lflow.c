@@ -61,6 +61,10 @@ lflow_init(void)
     MFF_LOG_REGS;
 #undef MFF_LOG_REG
 
+    /* xxx Document that this overrides the other registers */
+    expr_symtab_add_field(&symtab, "xxreg0", MFF_XXREG0, NULL, false);
+    expr_symtab_add_field(&symtab, "xxreg1", MFF_XXREG1, NULL, false);
+
     /* Connection tracking state. */
     expr_symtab_add_field(&symtab, "ct_mark", MFF_CT_MARK, NULL, false);
     expr_symtab_add_field(&symtab, "ct_label", MFF_CT_LABEL, NULL, false);
@@ -138,7 +142,12 @@ lflow_init(void)
     expr_symtab_add_field(&symtab, "arp.tha", MFF_ARP_THA, "arp", false);
 
     expr_symtab_add_predicate(&symtab, "nd",
-                              "icmp6.type == {135, 136} && icmp6.code == 0");
+              "icmp6.type == {135, 136} && icmp6.code == 0 && ip.ttl == 255");
+    /* xxx Document these. */
+    expr_symtab_add_predicate(&symtab, "nd_sol",
+              "icmp6.type == 135 && icmp6.code == 0 && ip.ttl == 255");
+    expr_symtab_add_predicate(&symtab, "nd_adv",
+              "icmp6.type == 136 && icmp6.code == 0 && ip.ttl == 255");
     expr_symtab_add_field(&symtab, "nd.target", MFF_ND_TARGET, "nd", false);
     expr_symtab_add_field(&symtab, "nd.sll", MFF_ND_SLL,
               "nd && icmp6.type == 135", false);
