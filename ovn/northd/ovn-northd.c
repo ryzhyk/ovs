@@ -1886,7 +1886,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
                 }
                 ds_clear(&actions);
                 ds_put_format(&actions,
-                    "na { eth.src = %s; "
+                    "nd_adv { eth.src = %s; "
                     "nd.tll = %s; "
                     "outport = inport; "
                     "inport = \"\"; /* Allow sending out inport. */ "
