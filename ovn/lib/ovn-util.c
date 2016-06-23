@@ -51,9 +51,13 @@ set_ipv6_netaddr(struct in6_addr addr, unsigned int plen,
     netaddr->mask = ipv6_create_mask(plen);
     netaddr->network = ipv6_addr_bitand(&addr, &netaddr->mask);
     netaddr->plen = plen;
+    in6_addr_solicited_node(&netaddr->sn_addr, &addr);
 
     netaddr->addr_s = xmalloc(INET6_ADDRSTRLEN);
     inet_ntop(AF_INET6, &addr, netaddr->addr_s, INET6_ADDRSTRLEN);
+    netaddr->sn_addr_s = xmalloc(INET6_ADDRSTRLEN);
+    inet_ntop(AF_INET6, &netaddr->sn_addr, netaddr->sn_addr_s,
+              INET6_ADDRSTRLEN);
     netaddr->network_s = xmalloc(INET6_ADDRSTRLEN);
     inet_ntop(AF_INET6, &netaddr->network, netaddr->network_s,
               INET6_ADDRSTRLEN);

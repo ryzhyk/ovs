@@ -33,12 +33,15 @@ struct ipv4_netaddr {
 };
 
 struct ipv6_netaddr {
+    /* xxx Choose a better example. */
     struct in6_addr addr;     /* fc00::1 */
     struct in6_addr mask;     /* ffff:ffff:ffff:ffff:: */
+    struct in6_addr sn_addr;  /* ff02:1:ff00::1 */
     struct in6_addr network;  /* fc00:: */
     unsigned int plen;        /* CIDR Prefix: 64 */
 
     char *addr_s;             /* "fc00::1" */
+    char *sn_addr_s;          /* "ff02:1:ff00::1" */
     char *network_s;          /* "fc00::" */
 };
 
