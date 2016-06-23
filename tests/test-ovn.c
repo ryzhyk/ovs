@@ -212,7 +212,12 @@ create_symtab(struct shash *symtab)
     expr_symtab_add_field(symtab, "arp.tpa", MFF_ARP_TPA, "arp", false);
     expr_symtab_add_field(symtab, "arp.tha", MFF_ARP_THA, "arp", false);
 
-    expr_symtab_add_predicate(symtab, "nd", "icmp6.type == {135, 136} && icmp6.code == 0");
+    expr_symtab_add_predicate(symtab, "nd",
+              "icmp6.type == {135, 136} && icmp6.code == 0 && ip.ttl == 255");
+    expr_symtab_add_predicate(symtab, "nd_sol",
+              "icmp6.type == 135 && icmp6.code == 0 && ip.ttl == 255");
+    expr_symtab_add_predicate(symtab, "nd_adv",
+              "icmp6.type == 136 && icmp6.code == 0 && ip.ttl == 255");
     expr_symtab_add_field(symtab, "nd.target", MFF_ND_TARGET, "nd", false);
     expr_symtab_add_field(symtab, "nd.sll", MFF_ND_SLL,
               "nd && icmp6.type == 135", false);
