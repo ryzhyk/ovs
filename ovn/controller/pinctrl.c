@@ -158,7 +158,7 @@ pinctrl_handle_arp(const struct flow *ip_flow, const struct match *md,
     enum ofp_version version = rconn_get_version(swconn);
 
     enum mf_field_id md_fields[] = {
-#if FLOW_N_REGS == 8
+#if FLOW_N_REGS == 16
         MFF_REG0,
         MFF_REG1,
         MFF_REG2,
@@ -167,6 +167,14 @@ pinctrl_handle_arp(const struct flow *ip_flow, const struct match *md,
         MFF_REG5,
         MFF_REG6,
         MFF_REG7,
+        MFF_REG8,
+        MFF_REG9,
+        MFF_REG10,
+        MFF_REG11,
+        MFF_REG12,
+        MFF_REG13,
+        MFF_REG14,
+        MFF_REG15,
 #else
 #error
 #endif
