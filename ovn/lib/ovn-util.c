@@ -175,6 +175,11 @@ extract_lrp_networks(const struct nbrec_logical_router_port *lrp,
         }
     }
 
+    /* Always add the IPv6 link local address. */
+    struct in6_addr lla;
+    in6_generate_lla(laddrs->ea, &lla);
+    add_ipv6_netaddr(laddrs, lla, 64);
+
     return true;
 }
 
