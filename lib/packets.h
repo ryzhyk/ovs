@@ -976,6 +976,12 @@ in6_generate_lla(struct eth_addr ea, struct in6_addr *lla)
     taddr->be16[7] = ea.be16[2];
 }
 
+static inline bool
+in6_is_lla(struct in6_addr addr)
+{
+    return addr.s6_addr32[0] == htonl(0xfe800000) && !(addr.s6_addr32[1]);
+}
+
 static inline void
 ipv6_multicast_to_ethernet(struct eth_addr *eth, const struct in6_addr *ip6)
 {
