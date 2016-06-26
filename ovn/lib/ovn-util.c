@@ -201,6 +201,17 @@ extract_lrp_networks(const struct nbrec_logical_router_port *lrp,
                          lrp->networks[i]);
             free(error);
         }
+
+        /* Always add the IPv6 link local address. */
+        lpa->n_ipv6_addrs++;
+        lpa->ipv6_addrs = xrealloc(lpa->ipv6_addrs,
+            sizeof(struct ipv6_netaddr) * lpa->n_ipv6_addrs);
+
+        struct ipv6_netaddr *na
+            = &lpa->ipv6_addrs[lpa->n_ipv6_addrs - 1];
+        struct in6_addr lla;
+        in6_generate_lla(lpa->ea, &lla);
+        set_ipv6_netaddr(lla, plen, na);
     }
 
     return true;
