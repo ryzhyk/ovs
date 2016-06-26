@@ -2085,12 +2085,17 @@ find_lrp_member_ip(const struct ovn_port *op, const char *ip_s)
 static void
 add_route(struct hmap *lflows, const struct ovn_port *op,
           const char *lrp_addr_s, const char *network_s, int plen,
-          const char *gateway)
+          const char *gateway, bool is_lla)
 {
     bool is_ipv4 = strchr(network_s, '.') ? true : false;
 
-    char *match = xasprintf("ip%s.dst == %s/%d", is_ipv4 ? "4" : "6",
-                            network_s, plen);
+    struct ds match = DS_EMPTY_INITIALIZER;
+    if (is_lla) {
+        /* xxx This is pretty hacky. */
+        ds_put_format(&match, "inport == %s && ", op->json_key);
+    }
+    ds_put_format(&match, "ip%s.dst == %s/%d", is_ipv4 ? "4" : "6",
+                  network_s, plen);
 
     struct ds actions = DS_EMPTY_INITIALIZER;
     ds_put_format(&actions, "ip.ttl--; %sreg0 = ", is_ipv4 ? "" : "xx");
@@ -2113,10 +2118,10 @@ add_route(struct hmap *lflows, const struct ovn_port *op,
 
     /* The priority here is calculated to implement longest-prefix-match
      * routing. */
-    ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_ROUTING, plen, match,
-                  ds_cstr(&actions));
+    ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_ROUTING, plen,
+                  ds_cstr(&match), ds_cstr(&actions));
     ds_destroy(&actions);
-    free(match);
+    ds_destroy(&match);
 }
 
 static void
@@ -2226,7 +2231,8 @@ build_static_route_flow(struct hmap *lflows, struct ovn_datapath *od,
         goto free_prefix_s;
     }
 
-    add_route(lflows, out_port, lrp_addr_s, prefix_s, plen, route->nexthop);
+    add_route(lflows, out_port, lrp_addr_s, prefix_s, plen,
+              route->nexthop, false);
 
 free_prefix_s:
     free(prefix_s);
@@ -2521,6 +2527,9 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
         }
 
         if (op->lrp_networks.n_ipv6_addrs) {
+            /* xxx Fix this comment about broadcast */
+            /* xxx We should only drop a specific lla for the interface,
+             * xxx since theoretically, it could conflict on a diff iface. */
             /* L3 admission control: drop packets that originate from an
              * IPv6 address owned by the router or a broadcast address
              * known to the router (priority 100). */
@@ -2542,7 +2551,12 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                         "ip6.dst <-> ip6.src; "
                         "ip.ttl = 255; "
                         "icmp6.type = 129; "
+#if 0
+                        /* xxx Disable this to allow pinging the lla,
+                         * xxx since this clears the inport, and our lla
+                         * xxx route needs to scope it. */
                         "inport = \"\"; /* Allow sending out inport. */ "
+#endif
                         "next; ");
             ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_INPUT, 90,
                           ds_cstr(&match), ds_cstr(&actions));
@@ -2728,13 +2742,20 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
         for (int i = 0; i < op->lrp_networks.n_ipv4_addrs; i++) {
             add_route(lflows, op, op->lrp_networks.ipv4_addrs[i].addr_s,
                       op->lrp_networks.ipv4_addrs[i].network_s,
-                      op->lrp_networks.ipv4_addrs[i].plen, NULL);
+                      op->lrp_networks.ipv4_addrs[i].plen, NULL, false);
         }
 
         for (int i = 0; i < op->lrp_networks.n_ipv6_addrs; i++) {
+            /* Do not route link local addresses. */
+            if (in6_is_lla(&op->lrp_networks.ipv6_addrs[i].addr)) {
+                add_route(lflows, op, op->lrp_networks.ipv6_addrs[i].addr_s,
+                          "fe80::", 64, NULL, true);
+                continue;
+            }
+
             add_route(lflows, op, op->lrp_networks.ipv6_addrs[i].addr_s,
                       op->lrp_networks.ipv6_addrs[i].network_s,
-                      op->lrp_networks.ipv6_addrs[i].plen, NULL);
+                      op->lrp_networks.ipv6_addrs[i].plen, NULL, false);
         }
     }
 
