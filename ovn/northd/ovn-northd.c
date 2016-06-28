@@ -2075,6 +2075,14 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
         /* Pass other traffic not already handled to the next table for
          * routing. */
         ovn_lflow_add(lflows, od, S_ROUTER_IN_IP_INPUT, 0, "1", "next;");
+
+        /* ND advertisement handling.  Use advertisements to populate
+         * the logical router's ARP/ND table. */
+        /* xxx We're also supposed to learn on solicitations. */
+        ovn_lflow_add(lflows, od, S_ROUTER_IN_IP_INPUT, 90, "nd_adv",
+                      "put_nd(inport, nd.target, nd.tll);");
+        ovn_lflow_add(lflows, od, S_ROUTER_IN_IP_INPUT, 80, "nd_sol",
+                      "put_nd(inport, ip6.src, nd.sll);");
     }
 
     HMAP_FOR_EACH (op, key_node, ports) {
@@ -2299,6 +2307,7 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                     op->lrp_networks.ipv6_addrs[i].addr_s);
             /* Is it safe to add nd.tll, since packet shorter? */
             ds_put_format(&actions,
+                          "put_nd(inport, ip6.src, nd.sll); "
                           "nd_adv { "
                           "eth.src = %s; "
                           "ip6.src = %s; "
@@ -2689,8 +2698,11 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
             continue;
         }
 
-        ovn_lflow_add(lflows, od, S_ROUTER_IN_ARP_RESOLVE, 0, "1",
+        ovn_lflow_add(lflows, od, S_ROUTER_IN_ARP_RESOLVE, 0, "ip4",
                       "get_arp(outport, reg0); next;");
+
+        ovn_lflow_add(lflows, od, S_ROUTER_IN_ARP_RESOLVE, 0, "ip6",
+                      "get_nd(outport, xxreg0); next;");
     }
 
     /* Local router ingress table 4: ARP request.
