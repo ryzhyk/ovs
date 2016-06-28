@@ -155,9 +155,9 @@ lflow_init(void)
               "icmp6.type == 136 && icmp6.code == 0 && ip.ttl == 255");
     expr_symtab_add_field(&symtab, "nd.target", MFF_ND_TARGET, "nd", false);
     expr_symtab_add_field(&symtab, "nd.sll", MFF_ND_SLL,
-              "nd && icmp6.type == 135", false);
+              "nd_sol && icmp6.type == 135", false);
     expr_symtab_add_field(&symtab, "nd.tll", MFF_ND_TLL,
-              "nd && icmp6.type == 136", false);
+              "nd_adv && icmp6.type == 136", false);
 
     expr_symtab_add_predicate(&symtab, "tcp", "ip.proto == 6");
     expr_symtab_add_field(&symtab, "tcp.src", MFF_TCP_SRC, "tcp", false);
@@ -592,16 +592,29 @@ consider_neighbor_flow(struct hmap *flow_table,
         return;
     }
 
-    ovs_be32 ip;
-    if (!ip_parse(b->ip, &ip)) {
-        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
-        VLOG_WARN_RL(&rl, "bad 'ip' %s", b->ip);
-        return;
+
+    if (strchr(b->ip, '.')) {
+        ovs_be32 ip;
+        if (!ip_parse(b->ip, &ip)) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
+            VLOG_WARN_RL(&rl, "bad 'ip' %s", b->ip);
+            return;
+        }
+        match_set_reg(match_p, 0, ntohl(ip));
+    } else {
+        struct in6_addr ip6;
+        if (!ipv6_parse(b->ip, &ip6)) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
+            VLOG_WARN_RL(&rl, "bad 'ip' %s", b->ip);
+            return;
+        }
+        ovs_be128 value;
+        memcpy(&value, &ip6, sizeof(value));
+        match_set_xxreg(match_p, 0, ntoh128(value));
     }
 
     match_set_metadata(match_p, htonll(pb->datapath->tunnel_key));
     match_set_reg(match_p, MFF_LOG_OUTPORT - MFF_REG0, pb->tunnel_key);
-    match_set_reg(match_p, 0, ntohl(ip));
 
     ofpbuf_clear(ofpacts_p);
     put_load(mac.ea, sizeof mac.ea, MFF_ETH_DST, 0, 48, ofpacts_p);
