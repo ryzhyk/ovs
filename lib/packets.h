@@ -1076,8 +1076,8 @@ void compose_arp(struct dp_packet *, uint16_t arp_op,
                  const struct eth_addr arp_sha,
                  const struct eth_addr arp_tha, bool broadcast,
                  ovs_be32 arp_spa, ovs_be32 arp_tpa);
-void compose_nd(struct dp_packet *, const struct eth_addr eth_src,
-                struct in6_addr *, struct in6_addr *);
+void compose_nd_sol(struct dp_packet *, const struct eth_addr eth_src,
+                    struct in6_addr *, struct in6_addr *);
 void compose_nd_adv(struct dp_packet *b, const struct eth_addr eth_src,
                     const struct eth_addr eth_dst,
                     const struct in6_addr *ipv6_src,

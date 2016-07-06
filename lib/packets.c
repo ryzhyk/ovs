@@ -1360,10 +1360,9 @@ compose_ipv6(struct dp_packet *packet, uint8_t proto, const ovs_be32 src[4],
     return data;
 }
 
-/* xxx Call this compose_nd_sol */
 void
-compose_nd(struct dp_packet *b, const struct eth_addr eth_src,
-           struct in6_addr *ipv6_src, struct in6_addr *ipv6_dst)
+compose_nd_sol(struct dp_packet *b, const struct eth_addr eth_src,
+               struct in6_addr *ipv6_src, struct in6_addr *ipv6_dst)
 {
     struct in6_addr sn_addr;
     struct eth_addr eth_dst;
