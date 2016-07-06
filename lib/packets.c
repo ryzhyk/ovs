@@ -1382,7 +1382,7 @@ compose_nd_sol(struct dp_packet *b, const struct eth_addr eth_src,
 
     ns->icmph.icmp6_type = ND_NEIGHBOR_SOLICIT;
     ns->icmph.icmp6_code = 0;
-    put_16aligned_be32(&ns->rco_flags, htonl(0));
+    put_16aligned_be32(&ns->rso_flags, htonl(0));
 
     nd_opt = &ns->options[0];
     nd_opt->nd_opt_type = ND_OPT_SOURCE_LINKADDR;
@@ -1401,7 +1401,7 @@ compose_nd_adv(struct dp_packet *b, const struct eth_addr eth_src,
                const struct eth_addr eth_dst,
                const struct in6_addr *ipv6_src,
                const struct in6_addr *ipv6_dst,
-               ovs_be32 rco_flags)
+               ovs_be32 rso_flags)
 {
     struct ovs_nd_msg *na;
     struct ovs_nd_opt *nd_opt;
@@ -1416,7 +1416,7 @@ compose_nd_adv(struct dp_packet *b, const struct eth_addr eth_src,
 
     na->icmph.icmp6_type = ND_NEIGHBOR_ADVERT;
     na->icmph.icmp6_code = 0;
-    put_16aligned_be32(&na->rco_flags, rco_flags);
+    put_16aligned_be32(&na->rso_flags, rso_flags);
 
     nd_opt = &na->options[0];
     nd_opt->nd_opt_type = ND_OPT_TARGET_LINKADDR;
