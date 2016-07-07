@@ -980,11 +980,12 @@ pinctrl_handle_nd_adv(const struct flow *ip_flow, const struct match *md,
     struct dp_packet packet;
     dp_packet_use_stub(&packet, packet_stub, sizeof packet_stub);
 
-    /* Frame the NA packet with RSO=011. */
+    /* xxx These flags are not exactly correct.  Look at section 7.2.4
+     * xxx of RFC 4861. */
     compose_nd_adv(&packet,
                    ip_flow->dl_dst, ip_flow->dl_src,
                    &ip_flow->nd_target, &ip_flow->ipv6_src,
-                   htonl(0x60000000));
+                   htonl(ND_RSO_ROUTER | ND_RSO_SOLICITED | ND_RSO_OVERRIDE));
 
     /* Reload previous packet metadata. */
     uint64_t ofpacts_stub[4096 / 8];
