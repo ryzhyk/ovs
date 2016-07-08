@@ -88,6 +88,9 @@ enum ofctrl_state {
 /* Current state. */
 static enum ofctrl_state state;
 
+/* Maximum number of state machine iterations per invocation*/
+#define OFCTRL_SM_ITER_MAX 10
+
 /* Transaction IDs for messages in flight to the switch. */
 static ovs_be32 xid, xid2;
 
@@ -401,6 +404,7 @@ ofctrl_run(const struct ovsrec_bridge *br_int)
     }
 
     enum ofctrl_state old_state;
+    int count = 0;
     do {
         old_state = state;
         switch (state) {
@@ -410,36 +414,36 @@ ofctrl_run(const struct ovsrec_bridge *br_int)
         default:
             OVS_NOT_REACHED();
         }
-    } while (state != old_state);
 
-    for (int i = 0; state == old_state && i < 50; i++) {
-        struct ofpbuf *msg = rconn_recv(swconn);
-        if (!msg) {
-            break;
-        }
-
-        const struct ofp_header *oh = msg->data;
-        enum ofptype type;
-        enum ofperr error;
-
-        error = ofptype_decode(&type, oh);
-        if (!error) {
-            switch (state) {
-#define STATE(NAME) case NAME: recv_##NAME(oh, type); break;
-                STATES
-#undef STATE
-            default:
-                OVS_NOT_REACHED();
+        for (int i = 0; state == old_state && i < 50; i++) {
+            struct ofpbuf *msg = rconn_recv(swconn);
+            if (!msg) {
+                break;
             }
-        } else {
-            char *s = ofp_to_string(oh, ntohs(oh->length), 1);
-            VLOG_WARN("could not decode OpenFlow message (%s): %s",
-                      ofperr_to_string(error), s);
-            free(s);
-        }
 
-        ofpbuf_delete(msg);
-    }
+            const struct ofp_header *oh = msg->data;
+            enum ofptype type;
+            enum ofperr error;
+
+            error = ofptype_decode(&type, oh);
+            if (!error) {
+                switch (state) {
+#define STATE(NAME) case NAME: recv_##NAME(oh, type); break;
+                    STATES
+#undef STATE
+                default:
+                    OVS_NOT_REACHED();
+                }
+            } else {
+                char *s = ofp_to_string(oh, ntohs(oh->length), 1);
+                VLOG_WARN("could not decode OpenFlow message (%s): %s",
+                          ofperr_to_string(error), s);
+                free(s);
+            }
+
+            ofpbuf_delete(msg);
+        }
+    } while (state != old_state && count++ < OFCTRL_SM_ITER_MAX);
 
     return (state == S_CLEAR_FLOWS || state == S_UPDATE_FLOWS
             ? mff_ovn_geneve : 0);
