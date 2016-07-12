@@ -1137,18 +1137,18 @@ build_port_security_nd(struct ovn_port *op, struct hmap *lflows)
 
             if (ps.n_ipv4_addrs) {
                 ds_put_cstr(&match, " && (");
-                for (size_t i = 0; i < ps.n_ipv4_addrs; i++) {
+                for (size_t j = 0; j < ps.n_ipv4_addrs; j++) {
                     ds_put_cstr(&match, "arp.spa == ");
-                    ovs_be32 mask = be32_prefix_mask(ps.ipv4_addrs[i].plen);
+                    ovs_be32 mask = be32_prefix_mask(ps.ipv4_addrs[j].plen);
                     /* When the netmask is applied, if the host portion is
                      * non-zero, the host can only use the specified
                      * address in the arp.spa.  If zero, the host is allowed
                      * to use any address in the subnet. */
-                    if (ps.ipv4_addrs[i].addr & ~mask) {
+                    if (ps.ipv4_addrs[j].addr & ~mask) {
                         ds_put_format(&match, IP_FMT,
-                                      IP_ARGS(ps.ipv4_addrs[i].addr));
+                                      IP_ARGS(ps.ipv4_addrs[j].addr));
                     } else {
-                       ip_format_masked(ps.ipv4_addrs[i].addr & mask, mask,
+                       ip_format_masked(ps.ipv4_addrs[j].addr & mask, mask,
                                         &match);
                     }
                     ds_put_cstr(&match, " || ");
@@ -1245,26 +1245,26 @@ build_port_security_ip(enum ovn_pipeline pipeline, struct ovn_port *op,
                               op->json_key, ETH_ADDR_ARGS(ps.ea));
             }
 
-            for (int i = 0; i < ps.n_ipv4_addrs; i++) {
-                ovs_be32 mask = be32_prefix_mask(ps.ipv4_addrs[i].plen);
+            for (int j = 0; j < ps.n_ipv4_addrs; j++) {
+                ovs_be32 mask = be32_prefix_mask(ps.ipv4_addrs[j].plen);
                 /* When the netmask is applied, if the host portion is
                  * non-zero, the host can only use the specified
                  * address.  If zero, the host is allowed to use any
                  * address in the subnet.
                  * */
-                if (ps.ipv4_addrs[i].addr & ~mask) {
+                if (ps.ipv4_addrs[j].addr & ~mask) {
                     ds_put_format(&match, IP_FMT,
-                                  IP_ARGS(ps.ipv4_addrs[i].addr));
-                    if (pipeline == P_OUT && ps.ipv4_addrs[i].plen != 32) {
+                                  IP_ARGS(ps.ipv4_addrs[j].addr));
+                    if (pipeline == P_OUT && ps.ipv4_addrs[j].plen != 32) {
                          /* Host is also allowed to receive packets to the
                          * broadcast address in the specified subnet.
                          */
                         ds_put_format(&match, ", "IP_FMT,
-                                      IP_ARGS(ps.ipv4_addrs[i].addr | ~mask));
+                                      IP_ARGS(ps.ipv4_addrs[j].addr | ~mask));
                     }
                 } else {
                     /* host portion is zero */
-                    ip_format_masked(ps.ipv4_addrs[i].addr & mask, mask,
+                    ip_format_masked(ps.ipv4_addrs[j].addr & mask, mask,
                                      &match);
                 }
                 ds_put_cstr(&match, ", ");
