@@ -41,6 +41,7 @@
 #include "ovn/lex.h"
 #include "ovn/lib/logical-fields.h"
 #include "ovn/lib/ovn-dhcp.h"
+#include "ovn/lib/ovn-log.h"
 #include "ovn/lib/ovn-util.h"
 #include "poll-loop.h"
 #include "rconn.h"
@@ -918,6 +919,39 @@ exit:
 }
 
 static void
+pinctrl_handle_log(struct dp_packet *packet OVS_UNUSED,
+                   const struct flow *headers,
+                   struct ofpbuf *userdata)
+{
+    struct log_pin_header *lph = ofpbuf_try_pull(userdata, sizeof *lph);
+    if (!lph) {
+        VLOG_WARN("log data missing");
+        return;
+    }
+
+    int name_len = ntohs(lph->name_len);
+    char *name = xmalloc(name_len+1);
+    if (name_len) {
+        char *tmp_name = ofpbuf_try_pull(userdata, name_len);
+        if (!name) {
+            VLOG_WARN("name missing");
+            free(name);
+            return;
+        }
+        memcpy(name, tmp_name, name_len);
+    }
+    name[name_len] = '\0';
+
+    char *packet_str = flow_to_string(headers, NULL);
+    VLOG_INFO("ACL name=%s, verdict=%s, severity=%s, packet=\"%s\"",
+              name_len ? name : "<unnamed>",
+              log_verdict_to_string(lph->verdict),
+              log_severity_to_string(lph->severity), packet_str);
+    free(packet_str);
+    free(name);
+}
+
+static void
 process_packet_in(const struct ofp_header *msg, struct controller_ctx *ctx)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
@@ -979,6 +1013,10 @@ process_packet_in(const struct ofp_header *msg, struct controller_ctx *ctx)
 
     case ACTION_OPCODE_DNS_LOOKUP:
         pinctrl_handle_dns_lookup(&packet, &pin, &userdata, &continuation, ctx);
+        break;
+
+    case ACTION_OPCODE_LOG:
+        pinctrl_handle_log(&packet, &headers, &userdata);
         break;
 
     default:

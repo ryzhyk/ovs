@@ -25,6 +25,7 @@
 #include "fatal-signal.h"
 #include "openvswitch/json.h"
 #include "ovn/lib/ovn-nb-idl.h"
+#include "ovn/lib/ovn-log.h"
 #include "ovn/lib/ovn-util.h"
 #include "packets.h"
 #include "poll-loop.h"
@@ -332,7 +333,7 @@ Logical switch commands:\n\
   ls-list                   print the names of all logical switches\n\
 \n\
 ACL commands:\n\
-  acl-add SWITCH DIRECTION PRIORITY MATCH ACTION [log]\n\
+  acl-add [--log] SWITCH DIRECTION PRIORITY MATCH ACTION\n\
                             add an ACL to SWITCH\n\
   acl-del SWITCH [DIRECTION [PRIORITY MATCH]]\n\
                             remove ACLs from SWITCH\n\
@@ -1369,8 +1370,25 @@ nbctl_acl_add(struct ctl_context *ctx)
     nbrec_acl_set_direction(acl, direction);
     nbrec_acl_set_match(acl, ctx->argv[4]);
     nbrec_acl_set_action(acl, action);
+
     if (shash_find(&ctx->options, "--log") != NULL) {
         nbrec_acl_set_log(acl, true);
+    }
+
+    /* Optional fields for logging. */
+    char **settings = (char **) &ctx->argv[6];
+    int n_settings = ctx->argc - 6;
+
+    for (int i = 0; i < n_settings; i++) {
+        if (!strncmp(settings[i], "severity=", 9)) {
+            const char *severity = settings[i] + 9;
+	        if (log_severity_from_string(severity) == UINT8_MAX) {
+                ctl_fatal("bad severity: %s", severity);
+            }
+            nbrec_acl_set_severity(acl, severity);
+        } else if (!strncmp(settings[i], "name=", 5)) {
+            nbrec_acl_set_name(acl, settings[i] + 5);
+        }
     }
 
     /* Check if same acl already exists for the ls */
@@ -3543,8 +3561,8 @@ static const struct ctl_command_syntax nbctl_commands[] = {
     { "ls-list", 0, 0, "", NULL, nbctl_ls_list, NULL, "", RO },
 
     /* acl commands. */
-    { "acl-add", 5, 5, "SWITCH DIRECTION PRIORITY MATCH ACTION", NULL,
-      nbctl_acl_add, NULL, "--log,--may-exist", RW },
+    { "acl-add", 5, 8, "SWITCH DIRECTION PRIORITY MATCH ACTION", NULL,
+      nbctl_acl_add, NULL, "--log,--may-exist,--name=,--severity=", RW },
     { "acl-del", 1, 4, "SWITCH [DIRECTION [PRIORITY MATCH]]", NULL,
       nbctl_acl_del, NULL, "", RW },
     { "acl-list", 1, 1, "SWITCH", NULL, nbctl_acl_list, NULL, "", RO },
