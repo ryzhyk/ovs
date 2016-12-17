@@ -2517,6 +2517,43 @@ build_pre_stateful(struct ovn_datapath *od, struct hmap *lflows)
                   REGBIT_CONNTRACK_DEFRAG" == 1", "ct_next;");
 }
 
+/* xxx Describe this and add commands to ovn-nbctl. */
+/* xxx This doesn't have any spaces before or after it gets inserted. */
+static void
+build_acl_log(struct ds *actions, const struct nbrec_acl *acl)
+{
+    if (!acl->log) {
+        return;
+    }
+
+    ds_put_cstr(actions, "log(");
+
+    if (acl->name) {
+        ds_put_format(actions, "name=\"%s\", ", acl->name);
+    }
+
+    /* If a severity level isn't specified, default to "info". */
+    if (acl->severity) {
+        ds_put_format(actions, "severity=%s, ", acl->severity);
+    } else {
+        ds_put_format(actions, "severity=info, ");
+    }
+
+    if (!strcmp(acl->action, "allow")) {
+        ds_put_cstr(actions, "verdict=allow, ");
+    } else if (!strcmp(acl->action, "allow-related")) {
+        ds_put_cstr(actions, "verdict=allow, ");
+    } else if (!strcmp(acl->action, "drop")) {
+        ds_put_cstr(actions, "verdict=drop, ");
+    } else if (!strcmp(acl->action, "reject")) {
+        ds_put_cstr(actions, "verdict=reject, ");
+    }
+
+    ds_chomp(actions, ' ');
+    ds_chomp(actions, ',');
+    ds_put_cstr(actions, ");");
+}
+
 static void
 build_acls(struct ovn_datapath *od, struct hmap *lflows)
 {
@@ -2630,11 +2667,16 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows)
              * may and then its return traffic would not have an
              * associated conntrack entry and would return "+invalid". */
             if (!has_stateful) {
+                struct ds actions = DS_EMPTY_INITIALIZER;
+                build_acl_log(&actions, acl);
+                ds_put_cstr(&actions, "next;");
                 ovn_lflow_add(lflows, od, stage,
-                              acl->priority + OVN_ACL_PRI_OFFSET,
-                              acl->match, "next;");
+                              acl->priority + OVN_ACL_PRI_OFFSET, acl->match,
+                              ds_cstr(&actions));
+                ds_destroy(&actions);
             } else {
                 struct ds match = DS_EMPTY_INITIALIZER;
+                struct ds actions = DS_EMPTY_INITIALIZER;
 
                 /* Commit the connection tracking entry if it's a new
                  * connection that matches this ACL.  After this commit,
@@ -2652,10 +2694,12 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows)
                                       " || (!ct.new && ct.est && !ct.rpl "
                                            "&& ct_label.blocked == 1)) "
                                       "&& (%s)", acl->match);
+                ds_put_cstr(&actions, REGBIT_CONNTRACK_COMMIT" = 1; ");
+                build_acl_log(&actions, acl);
+                ds_put_cstr(&actions, "next;");
                 ovn_lflow_add(lflows, od, stage,
                               acl->priority + OVN_ACL_PRI_OFFSET,
-                              ds_cstr(&match),
-                               REGBIT_CONNTRACK_COMMIT" = 1; next;");
+                              ds_cstr(&match), ds_cstr(&actions));
 
                 /* Match on traffic in the request direction for an established
                  * connection tracking entry that has not been marked for
@@ -2664,19 +2708,25 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows)
                  * connection is still allowed by the currently defined
                  * policy. */
                 ds_clear(&match);
+                ds_clear(&actions);
                 ds_put_format(&match,
                               "!ct.new && ct.est && !ct.rpl"
                               " && ct_label.blocked == 0 && (%s)",
                               acl->match);
+
+                build_acl_log(&actions, acl);
+                ds_put_cstr(&actions, "next;");
                 ovn_lflow_add(lflows, od, stage,
                               acl->priority + OVN_ACL_PRI_OFFSET,
-                              ds_cstr(&match), "next;");
+                              ds_cstr(&match), ds_cstr(&actions));
 
                 ds_destroy(&match);
+                ds_destroy(&actions);
             }
         } else if (!strcmp(acl->action, "drop")
                    || !strcmp(acl->action, "reject")) {
             struct ds match = DS_EMPTY_INITIALIZER;
+            struct ds actions = DS_EMPTY_INITIALIZER;
 
             /* XXX Need to support "reject", treat it as "drop;" for now. */
             if (!strcmp(acl->action, "reject")) {
@@ -2694,8 +2744,12 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows)
                               "(!ct.est || (ct.est && ct_label.blocked == 1)) "
                               "&& (%s)",
                               acl->match);
-                ovn_lflow_add(lflows, od, stage, acl->priority +
-                        OVN_ACL_PRI_OFFSET, ds_cstr(&match), "drop;");
+                ds_clear(&actions);
+                build_acl_log(&actions, acl);
+                ds_put_cstr(&actions, acl->log ? " /*drop */" : "drop;");
+                ovn_lflow_add(lflows, od, stage,
+                              acl->priority + OVN_ACL_PRI_OFFSET,
+                              ds_cstr(&match), ds_cstr(&actions));
 
                 /* For an existing connection without ct_label set, we've
                  * encountered a policy change. ACLs previously allowed
@@ -2708,23 +2762,28 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows)
                  * ct_commit() to the "stateful" stage, but since we're
                  * dropping the packet, we go ahead and do it here. */
                 ds_clear(&match);
+                ds_clear(&actions);
                 ds_put_format(&match,
                               "ct.est && ct_label.blocked == 0 && (%s)",
                               acl->match);
+                ds_put_cstr(&actions, "ct_commit(ct_label=1/1);");
+                build_acl_log(&actions, acl);
                 ovn_lflow_add(lflows, od, stage,
                               acl->priority + OVN_ACL_PRI_OFFSET,
-                              ds_cstr(&match), "ct_commit(ct_label=1/1);");
+                              ds_cstr(&match), ds_cstr(&actions));
 
-                ds_destroy(&match);
             } else {
                 /* There are no stateful ACLs in use on this datapath,
                  * so a "drop" ACL is simply the "drop" logical flow action
                  * in all cases. */
+                ds_clear(&actions);
+                build_acl_log(&actions, acl);
                 ovn_lflow_add(lflows, od, stage,
                               acl->priority + OVN_ACL_PRI_OFFSET,
-                              acl->match, "drop;");
-                ds_destroy(&match);
+                              acl->match, ds_cstr(&actions));
             }
+            ds_destroy(&match);
+            ds_destroy(&actions);
         }
     }
 

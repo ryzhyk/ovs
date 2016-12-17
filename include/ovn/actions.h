@@ -48,29 +48,30 @@ struct simap;
  *    "ovnact".  The structure must have a fixed length, that is, it may not
  *    end with a flexible array member.
  */
-#define OVNACTS                                     \
-    OVNACT(OUTPUT,        ovnact_null)              \
-    OVNACT(NEXT,          ovnact_next)              \
-    OVNACT(LOAD,          ovnact_load)              \
-    OVNACT(MOVE,          ovnact_move)              \
-    OVNACT(EXCHANGE,      ovnact_move)              \
-    OVNACT(DEC_TTL,       ovnact_null)              \
-    OVNACT(CT_NEXT,       ovnact_ct_next)           \
-    OVNACT(CT_COMMIT,     ovnact_ct_commit)         \
-    OVNACT(CT_DNAT,       ovnact_ct_nat)            \
-    OVNACT(CT_SNAT,       ovnact_ct_nat)            \
-    OVNACT(CT_LB,         ovnact_ct_lb)             \
-    OVNACT(CT_CLEAR,      ovnact_null)              \
-    OVNACT(CLONE,         ovnact_nest)              \
-    OVNACT(ARP,           ovnact_nest)              \
-    OVNACT(ND_NA,         ovnact_nest)              \
-    OVNACT(GET_ARP,       ovnact_get_mac_bind)      \
-    OVNACT(PUT_ARP,       ovnact_put_mac_bind)      \
-    OVNACT(GET_ND,        ovnact_get_mac_bind)      \
-    OVNACT(PUT_ND,        ovnact_put_mac_bind)      \
-    OVNACT(PUT_DHCPV4_OPTS, ovnact_put_dhcp_opts)   \
-    OVNACT(PUT_DHCPV6_OPTS, ovnact_put_dhcp_opts)   \
-    OVNACT(SET_QUEUE,       ovnact_set_queue)
+#define OVNACTS                                       \
+    OVNACT(OUTPUT,            ovnact_null)            \
+    OVNACT(NEXT,              ovnact_next)            \
+    OVNACT(LOAD,              ovnact_load)            \
+    OVNACT(MOVE,              ovnact_move)            \
+    OVNACT(EXCHANGE,          ovnact_move)            \
+    OVNACT(DEC_TTL,           ovnact_null)            \
+    OVNACT(CT_NEXT,           ovnact_ct_next)         \
+    OVNACT(CT_COMMIT,         ovnact_ct_commit)       \
+    OVNACT(CT_DNAT,           ovnact_ct_nat)          \
+    OVNACT(CT_SNAT,           ovnact_ct_nat)          \
+    OVNACT(CT_LB,             ovnact_ct_lb)           \
+    OVNACT(CT_CLEAR,          ovnact_null)            \
+    OVNACT(CLONE,             ovnact_nest)            \
+    OVNACT(ARP,               ovnact_nest)            \
+    OVNACT(ND_NA,             ovnact_nest)            \
+    OVNACT(GET_ARP,           ovnact_get_mac_bind)    \
+    OVNACT(PUT_ARP,           ovnact_put_mac_bind)    \
+    OVNACT(GET_ND,            ovnact_get_mac_bind)    \
+    OVNACT(PUT_ND,            ovnact_put_mac_bind)    \
+    OVNACT(PUT_DHCPV4_OPTS,   ovnact_put_dhcp_opts)   \
+    OVNACT(PUT_DHCPV6_OPTS,   ovnact_put_dhcp_opts)   \
+    OVNACT(SET_QUEUE,         ovnact_set_queue)       \
+    OVNACT(LOG,               ovnact_log)
 
 /* enum ovnact_type, with a member OVNACT_<ENUM> for each action. */
 enum OVS_PACKED_ENUM ovnact_type {
@@ -258,6 +259,32 @@ struct ovnact_set_queue {
     uint16_t queue_id;
 };
 
+/* xxx Is this right place for this? */
+struct log_pin_header {
+    uint8_t verdict;            /* One of LOG_VERDICT_*. */
+    uint8_t severity;
+    ovs_be16 name_len;
+};
+
+enum log_verdict {
+    LOG_VERDICT_ALLOW,
+    LOG_VERDICT_DROP,
+    LOG_VERDICT_REJECT
+};
+
+/* xxx Right place for this? */
+const char *log_verdict_to_string(uint8_t verdict);
+const char *log_severity_to_string(uint8_t severity);
+uint8_t log_severity_from_string(const char *name);
+
+/* OVNACT_LOG. */
+struct ovnact_log {
+    struct ovnact ovnact;
+    ovs_be32 verdict;           /* One of LOG_VERDICT_*. */
+    char *name;
+    uint8_t severity;
+};
+
 /* Internal use by the helpers below. */
 void ovnact_init(struct ovnact *, enum ovnact_type, size_t len);
 void *ovnact_put(struct ofpbuf *, enum ovnact_type, size_t len);
@@ -385,6 +412,18 @@ enum action_opcode {
      *   - Any number of DHCPv6 options.
      */
     ACTION_OPCODE_PUT_DHCPV6_OPTS,
+
+    /* "log(arguments)".
+     *
+     *  xxx Indicate default values if not set.
+     *
+     * Arguments are as follows:
+     *   - An 8-bit type.
+     *   - An 8-bit severity.
+     *   - An 16-bit string length for the name.
+     *   - A variable length string containing the name.
+     */
+    ACTION_OPCODE_LOG,
 };
 
 /* Header. */
