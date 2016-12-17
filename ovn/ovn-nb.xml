@@ -958,6 +958,13 @@
       <ref column="match"/>, and <code>deny</code> as <ref column="action"/>.)
     </p>
 
+    <column name="name">
+      <p>
+        A name for the ACL.  The name has no special meaning, but may be
+        used by the logging system to identify the source rule.
+      </p>
+    </column>
+
     <column name="priority">
       <p>
         The ACL rule's priority.  Rules with numerically higher priority
@@ -1048,9 +1055,16 @@
         log message on the transport node or nodes that perform ACL processing.
         Logging may be combined with any <ref column="action"/>.
       </p>
+    </column>
 
+    <column name="severity">
       <p>
-        Logging is not yet implemented.
+        When <ref column="log"/> is <code>true</code> indicates the
+        severity of the ACL.  The severity levels match those of syslog
+        with the following values (from more to less serious):
+        <code>alert</code>, <code>warning</code>, <code>notice</code>,
+        <code>info</code>, or <code>debug</code>.  If a severity is not
+        specified, the default is <code>info</code>.
       </p>
     </column>
 

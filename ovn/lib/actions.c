@@ -17,6 +17,7 @@
 #include <config.h>
 #include <stdarg.h>
 #include <stdbool.h>
+#include <syslog.h>
 #include "bitmap.h"
 #include "byte-order.h"
 #include "compiler.h"
@@ -1759,6 +1760,181 @@ ovnact_dns_lookup_free(struct ovnact_dns_lookup *dl OVS_UNUSED)
 {
 }
 
+static void
+parse_log_arg(struct action_context *ctx, struct ovnact_log *log)
+{
+    if (lexer_match_id(ctx->lexer, "verdict")) {
+        /* xxx Use consistent lookahead as other arguments. */
+        if (!lexer_force_match(ctx->lexer, LEX_T_EQUALS)) {
+            return;
+        }
+        if (lexer_match_id(ctx->lexer, "drop")) {
+            log->verdict = LOG_VERDICT_DROP;
+        } else if (lexer_match_id(ctx->lexer, "reject")) {
+            log->verdict = LOG_VERDICT_REJECT;
+        } else if (lexer_match_id(ctx->lexer, "allow")) {
+            log->verdict = LOG_VERDICT_ALLOW;
+        } else {
+            lexer_syntax_error(ctx->lexer, "unknown acl verdict");
+        }
+    } else if (lexer_match_id(ctx->lexer, "name")) {
+        if (!lexer_force_match(ctx->lexer, LEX_T_EQUALS)) {
+            return;
+        }
+        /* If there are multiple "name" arguments, use the first. */
+        if (log->name) {
+            lexer_get(ctx->lexer);
+            return;
+        }
+        if (ctx->lexer->token.type == LEX_T_STRING) {
+            /* xxx Limit string length? */
+            log->name = xstrdup(ctx->lexer->token.s);
+        } else {
+            lexer_syntax_error(ctx->lexer, "expecting string");
+            return;
+        }
+        lexer_get(ctx->lexer);
+    } else if (lexer_match_id(ctx->lexer, "severity")) {
+        if (!lexer_force_match(ctx->lexer, LEX_T_EQUALS)) {
+            return;
+        }
+        if (ctx->lexer->token.type == LEX_T_ID) {
+            uint8_t severity = log_severity_from_string(ctx->lexer->token.s);
+            if (severity != UINT8_MAX) {
+                log->severity = severity;
+            } else {
+                lexer_syntax_error(ctx->lexer, "expecting integer");
+                lexer_get(ctx->lexer);
+                return;
+            }
+        } else {
+            lexer_syntax_error(ctx->lexer, "expecting token");
+        }
+        lexer_get(ctx->lexer);
+    } else {
+        lexer_syntax_error(ctx->lexer, NULL);
+    }
+}
+
+static void
+parse_LOG(struct action_context *ctx)
+{
+    struct ovnact_log *log = ovnact_put_LOG(ctx->ovnacts);
+    if (lexer_match(ctx->lexer, LEX_T_LPAREN)) {
+        while (!lexer_match(ctx->lexer, LEX_T_RPAREN)) {
+            parse_log_arg(ctx, log);
+            if (ctx->lexer->error) {
+                return;
+            }
+            lexer_match(ctx->lexer, LEX_T_COMMA);
+        }
+    }
+}
+
+const char *
+log_verdict_to_string(uint8_t verdict)
+{
+    if (verdict == LOG_VERDICT_ALLOW) {
+        return "allow";
+    } else if (verdict == LOG_VERDICT_DROP) {
+        return "drop";
+    } else if (verdict == LOG_VERDICT_REJECT) {
+        return "reject";
+    } else {
+        return "<unknown>";
+    }
+}
+
+const char *
+log_severity_to_string(uint8_t severity)
+{
+    if (severity == LOG_ALERT) {
+        return "alert";
+    } else if (severity == LOG_WARNING) {
+        return "warning";
+    } else if (severity == LOG_NOTICE) {
+        return "notice";
+    } else if (severity == LOG_INFO) {
+        return "info";
+    } else if (severity == LOG_DEBUG) {
+        return "debug";
+    } else {
+        return "<unknown>";
+    }
+}
+
+uint8_t
+log_severity_from_string(const char *name)
+{
+    if (!strcmp(name, "alert")) {
+        return LOG_ALERT;
+    } else if (!strcmp(name, "warning")) {
+        return LOG_WARNING;
+    } else if (!strcmp(name, "notice")) {
+        return LOG_NOTICE;
+    } else if (!strcmp(name, "info")) {
+        return LOG_INFO;
+    } else if (!strcmp(name, "debug")) {
+        return LOG_DEBUG;
+    } else {
+        return UINT8_MAX;
+    }
+}
+
+
+static void
+format_LOG(const struct ovnact_log *log, struct ds *s)
+{
+    ds_put_cstr(s, "log(");
+
+    /* xxx Obviously, need propery non-value for log severity */
+    if (log->name) {
+        ds_put_format(s, "name=\"%s\", ", log->name);
+    }
+
+    /* xxx Obviously, need propery non-value for log severity */
+    if (log->severity) {
+        ds_put_format(s, "severity=%d, ", log->severity);
+    }
+
+    /* xxx Print nothing if not a standard verdict? */
+    ds_put_format(s, "verdict=%s, ", log_verdict_to_string(log->verdict));
+
+    ds_chomp(s, ' ');
+    ds_chomp(s, ',');
+    ds_put_cstr(s, ");");
+}
+
+static void
+encode_LOG(const struct ovnact_log *log,
+           const struct ovnact_encode_params *ep OVS_UNUSED,
+           struct ofpbuf *ofpacts)
+{
+    /* xxx Should/can this not push down verdict for rules that don't
+     * xxx generate a log? */
+    size_t oc_offset = encode_start_controller_op(ACTION_OPCODE_LOG, false,
+                                                  ofpacts);
+
+    struct log_pin_header *lph = ofpbuf_put_uninit(ofpacts, sizeof *lph);
+    lph->verdict = log->verdict;
+    lph->severity = log->severity;
+    lph->name_len = 0;
+
+    if (log->name) {
+        int name_len = strlen(log->name);
+        lph->name_len = htons(name_len);
+        ofpbuf_put(ofpacts, log->name, name_len);
+    }
+
+    encode_finish_controller_op(oc_offset, ofpacts);
+}
+
+static void
+ovnact_log_free(struct ovnact_log *log)
+{
+    free(log->name);
+}
+
 /* Parses an assignment or exchange or put_dhcp_opts action. */
 static void
 parse_set_action(struct action_context *ctx)
@@ -1838,6 +2014,8 @@ parse_action(struct action_context *ctx)
         parse_put_mac_bind(ctx, 128, ovnact_put_PUT_ND(ctx->ovnacts));
     } else if (lexer_match_id(ctx->lexer, "set_queue")) {
         parse_SET_QUEUE(ctx);
+    } else if (lexer_match_id(ctx->lexer, "log")) {
+        parse_LOG(ctx);
     } else {
         lexer_syntax_error(ctx->lexer, "expecting action");
     }

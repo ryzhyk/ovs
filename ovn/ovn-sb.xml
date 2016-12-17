@@ -1515,6 +1515,35 @@
         </dd>
       </dl>
 
+      <dl>
+        <dt>
+          <code>log(<var>argument</var>, </code>...<code>);</code>
+        </dt>
+
+        <dd>
+          <p>
+            Send the packet to <code>ovn-controller</code> for potential
+            logging.  The local <code>ovn-controller</code> will make a
+            decision whether or where to log the packet.
+          </p>
+          <p>
+            The <code>log</code> action takes zero or more of the
+            following <var>arguments</var>:
+          </p>
+          <ul>
+            <li><code>name</code> A name for the ACL.</li>
+            <li><code>severity</code> An indication of the severity
+                of the event.  The value is one of following (from more to
+                less serious): <code>alert</code>, <code>warning</code>,
+                <code>notice</code>, <code>info</code>, or
+                <code>debug</code>.</li>
+            <li><code>verdict</code> The verdict for packets matching
+                the flow.  One of <code>allow</code>, <code>deny</code>,
+                or <code>reject</code>.</li>
+          </ul>
+        </dd>
+      </dl>
+
       <p>
         The following actions will likely be useful later, but they have not
         been thought out carefully.

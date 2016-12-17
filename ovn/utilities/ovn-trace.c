@@ -1834,6 +1834,10 @@ trace_actions(const struct ovnact *ovnacts, size_t ovnacts_len,
         case OVNACT_DNS_LOOKUP:
             execute_dns_lookup(ovnact_get_DNS_LOOKUP(a), uflow, super);
             break;
+
+        case OVNACT_LOG:
+            /* xxx Fix this! */
+            break;
         }
 
     }

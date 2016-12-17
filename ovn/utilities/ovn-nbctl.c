@@ -1360,6 +1360,12 @@ nbctl_acl_add(struct ctl_context *ctx)
     nbrec_acl_set_direction(acl, direction);
     nbrec_acl_set_match(acl, ctx->argv[4]);
     nbrec_acl_set_action(acl, action);
+    nbrec_acl_set_severity(acl, "info");
+    if (!strcmp(action, "drop")) {
+        nbrec_acl_set_name(acl, "foo-fooey");
+    } else {
+        nbrec_acl_set_name(acl, "goo-gooey");
+    }
     if (shash_find(&ctx->options, "--log") != NULL) {
         nbrec_acl_set_log(acl, true);
     }
