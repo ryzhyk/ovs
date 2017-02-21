@@ -5655,6 +5655,9 @@ as hv ovs-appctl -t ovn-controller inject-pkt "$packet"
 
 ovs-ofctl dump-flows br-int
 
+
+ovs-appctl dpif/dump-flows br-int
+
 AT_CHECK([ovn-sbctl foo])
 
 
