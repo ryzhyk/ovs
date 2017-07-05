@@ -41,9 +41,8 @@ struct pkt_metadata;
     SPR(SLOW_BFD,        "bfd",        "Consists of BFD packets")       \
     SPR(SLOW_LACP,       "lacp",       "Consists of LACP packets")      \
     SPR(SLOW_STP,        "stp",        "Consists of STP packets")       \
-    SPR(SLOW_LLDP,       "lldp",       "Consists of LLDP packets")    \
-    SPR(SLOW_CONTROLLER, "controller",                                  \
-        "Sends \"packet-in\" messages to the OpenFlow controller")      \
+    SPR(SLOW_LLDP,       "lldp",       "Consists of LLDP packets")      \
+    SPR(SLOW_FREEZE,     "freeze",     "xxx Frozen state")      \
     SPR(SLOW_ACTION,     "action",                                      \
         "Uses action(s) not supported by datapath")
 
@@ -291,6 +290,7 @@ enum user_action_cookie_type {
     USER_ACTION_COOKIE_SLOW_PATH,    /* Userspace must process this flow. */
     USER_ACTION_COOKIE_FLOW_SAMPLE,  /* Packet for per-flow sampling. */
     USER_ACTION_COOKIE_IPFIX,        /* Packet for per-bridge IPFIX sampling. */
+    USER_ACTION_COOKIE_CONTROLLER,   /* Forward packet to controller. */
 };
 
 /* user_action_cookie is passed as argument to OVS_ACTION_ATTR_USERSPACE. */
@@ -323,6 +323,17 @@ union user_action_cookie {
         uint16_t   type;            /* USER_ACTION_COOKIE_IPFIX. */
         odp_port_t output_odp_port; /* The output odp port. */
     } ipfix;
+
+    struct {
+        uint16_t type;          /* USER_ACTION_COOKIE_CONTROLLER. */
+        uint16_t reason;
+        uint32_t recirc_id;     /* Non-zero if recirc id allocated. */
+        ovs_32aligned_be64 rule_cookie;
+        uint16_t controller_id;
+        uint16_t max_len;
+        uint16_t userdata_len;
+        uint8_t userdata[0];
+    } controller;
 };
 BUILD_ASSERT_DECL(sizeof(union user_action_cookie) == 24);
 

@@ -107,7 +107,14 @@ struct frozen_metadata {
     ovs_be64 metadata;            /* OpenFlow Metadata. */
     uint64_t regs[FLOW_N_XREGS];  /* Registers. */
     ofp_port_t in_port;           /* Incoming port. */
+
+    /* Connection tracking */
+    uint8_t ct_state;           /* Connection tracking state. */
+    uint16_t ct_zone;           /* Connection tracking zone. */
+    uint32_t ct_mark;           /* Connection mark.*/
+    ovs_u128 ct_label;          /* Connection label. */
 };
+BUILD_ASSERT_DECL(sizeof(struct frozen_metadata) % 8 == 0);
 
 static inline void
 frozen_metadata_from_flow(struct frozen_metadata *md,
@@ -121,6 +128,15 @@ frozen_metadata_from_flow(struct frozen_metadata *md,
 }
 
 static inline void
+frozen_ct_from_flow(struct frozen_metadata *md, const struct flow *flow)
+{
+    md->ct_state = flow->ct_state;
+    md->ct_zone = flow->ct_zone;
+    md->ct_mark = flow->ct_mark;
+    md->ct_label = flow->ct_label;
+}
+
+static inline void
 frozen_metadata_to_flow(const struct frozen_metadata *md,
                         struct flow *flow)
 {
@@ -128,6 +144,15 @@ frozen_metadata_to_flow(const struct frozen_metadata *md,
     flow->metadata = md->metadata;
     memcpy(flow->regs, md->regs, sizeof flow->regs);
     flow->in_port.ofp_port = md->in_port;
+}
+
+static inline void
+frozen_ct_to_flow(const struct frozen_metadata *md, struct flow *flow)
+{
+    flow->ct_state = md->ct_state;
+    flow->ct_mark = md->ct_mark;
+    flow->ct_zone = md->ct_zone;
+    flow->ct_label = md->ct_label;
 }
 
 /* State that flow translation can save, to restore when translation
@@ -138,6 +163,7 @@ struct frozen_state {
 
     /* Pipeline context for processing when thawing. */
     struct uuid ofproto_uuid;     /* Bridge to resume from. */
+    struct ofproto_dpif *ofproto; /* xxx temp */
     struct frozen_metadata metadata; /* Flow metadata. */
     uint8_t *stack;               /* Stack if any. */
     size_t stack_size;
