@@ -42,9 +42,8 @@ struct pkt_metadata;
     SPR(SLOW_BFD,        "bfd",        "Consists of BFD packets")       \
     SPR(SLOW_LACP,       "lacp",       "Consists of LACP packets")      \
     SPR(SLOW_STP,        "stp",        "Consists of STP packets")       \
-    SPR(SLOW_LLDP,       "lldp",       "Consists of LLDP packets")    \
-    SPR(SLOW_CONTROLLER, "controller",                                  \
-        "Sends \"packet-in\" messages to the OpenFlow controller")      \
+    SPR(SLOW_LLDP,       "lldp",       "Consists of LLDP packets")      \
+    SPR(SLOW_PAUSE,      "pause",      "Controller action with pause")  \
     SPR(SLOW_ACTION,     "action",                                      \
         "Uses action(s) not supported by datapath")
 
@@ -298,6 +297,12 @@ enum user_action_cookie_type {
     USER_ACTION_COOKIE_SLOW_PATH,    /* Userspace must process this flow. */
     USER_ACTION_COOKIE_FLOW_SAMPLE,  /* Packet for per-flow sampling. */
     USER_ACTION_COOKIE_IPFIX,        /* Packet for per-bridge IPFIX sampling. */
+    USER_ACTION_COOKIE_CONTROLLER,   /* Forward packet to controller. */
+};
+
+/* Flags for controller cookies. */
+enum user_action_controller_flags {
+    UACF_DONT_SEND    = 1 << 0,      /* Don't send the packet to controller. */
 };
 
 /* user_action_cookie is passed as argument to OVS_ACTION_ATTR_USERSPACE. */
@@ -333,6 +338,16 @@ struct user_action_cookie {
             /* USER_ACTION_COOKIE_IPFIX. */
             odp_port_t output_odp_port; /* The output odp port. */
         } ipfix;
+
+        struct {
+            /* USER_ACTION_COOKIE_CONTROLLER. */
+            uint16_t flags;         /* UACF_* */
+            uint16_t reason;
+            uint32_t recirc_id;
+            ovs_32aligned_be64 rule_cookie;
+            uint16_t controller_id;
+            uint16_t max_len;
+        } controller;
     };
 };
 BUILD_ASSERT_DECL(sizeof(struct user_action_cookie) == 48);
