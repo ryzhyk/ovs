@@ -86,7 +86,7 @@ struct xlate_in {
      * or if we are accounting for packets that the datapath has processed, but
      * not if we are just revalidating, or if we want to execute the
      * side-effects later via the xlate cache. */
-    bool allow_side_effects;
+    bool allow_side_effects;                       // xxx Update comment
 
     /* The rule initiating translation or NULL. If both 'rule' and 'ofpacts'
      * are NULL, xlate_actions() will do the initial rule lookup itself. */

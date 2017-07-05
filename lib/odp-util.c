@@ -358,6 +358,31 @@ format_odp_userspace_action(struct ds *ds, const struct nlattr *attr,
                 odp_portno_name_format(portno_names,
                                        cookie.ipfix.output_odp_port, ds);
                 ds_put_char(ds, ')');
+            } else if (userdata_len >= sizeof cookie.controller
+                       && cookie.type == USER_ACTION_COOKIE_CONTROLLER) {
+                ds_put_format(ds, ",controller(reason=%"PRIu16
+                              ",recirc_id=%"PRIu16
+                              ",rule_cookie=%"PRIx64
+                              ",controller_id=%"PRIu16
+                              ",max_len=%"PRIu16
+                              ",userdata_len=%"PRIu16,
+                              cookie.controller.reason,
+                              cookie.controller.recirc_id,
+                              ntohll(get_32aligned_be64(
+                                         &cookie.controller.rule_cookie)),
+                              cookie.controller.controller_id,
+                              cookie.controller.max_len,
+                              cookie.controller.userdata_len);
+                if (cookie.controller.userdata_len) {
+                    size_t i;
+                    ds_put_format(ds, ",userdata(");
+                    for (i = 0; i < cookie.controller.userdata_len; i++) {
+                        ds_put_format(ds, "%02x",
+                                      cookie.controller.userdata[i]);
+                    }
+                    ds_put_char(ds, ')');
+                }
+                ds_put_char(ds, ')');
             } else {
                 userdata_unspec = true;
             }

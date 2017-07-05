@@ -108,6 +108,7 @@ struct frozen_metadata {
     uint64_t regs[FLOW_N_XREGS];  /* Registers. */
     ofp_port_t in_port;           /* Incoming port. */
 };
+BUILD_ASSERT_DECL(sizeof(struct frozen_metadata) % 8 == 0);
 
 static inline void
 frozen_metadata_from_flow(struct frozen_metadata *md,
@@ -138,6 +139,7 @@ struct frozen_state {
 
     /* Pipeline context for processing when thawing. */
     struct uuid ofproto_uuid;     /* Bridge to resume from. */
+    struct ofproto_dpif *ofproto; /* xxx temp */
     struct frozen_metadata metadata; /* Flow metadata. */
     uint8_t *stack;               /* Stack if any. */
     size_t stack_size;

@@ -49,6 +49,7 @@ Post-v2.7.0
    - New commands 'stp/show' and 'rstp/show' (see ovs-vswitchd(8)).
    - Add the command 'ovs-appctl stp/show' (see ovs-vswitchd(8)).
    - OpenFlow:
+     * No longer slow-path traffic that sends to a controller.
      * All features required by OpenFlow 1.4 are now implemented, so
        ovs-vswitchd now enables OpenFlow 1.4 by default (in addition to
        OpenFlow 1.0 to 1.3).

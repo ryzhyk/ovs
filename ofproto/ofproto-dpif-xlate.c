@@ -1367,7 +1367,7 @@ xlate_lookup_ofproto(const struct dpif_backer *backer, const struct flow *flow,
 }
 
 /* Given a datapath and flow metadata ('backer', and 'flow' respectively),
- * optionally populates 'ofproto' with the ofproto_dpif, 'ofp_in_port' with the
+ * optionally populates 'ofprotop' with the ofproto_dpif, 'ofp_in_port' with the
  * openflow in_port, and 'ipfix', 'sflow', and 'netflow' with the appropriate
  * handles for those protocols if they're enabled.  Caller may use the returned
  * pointers until quiescing, for longer term use additional references must
@@ -4092,6 +4092,7 @@ flood_packets(struct xlate_ctx *ctx, bool all)
     ctx->nf_output_iface = NF_OUT_FLOOD;
 }
 
+#if 0
 /* Copy and reformat a partially xlated odp actions to a new
  * odp actions list in 'b', so that the new actions list
  * can be executed by odp_execute_actions.
@@ -4214,7 +4215,9 @@ error:
     ofpbuf_delete(b);
     return false;
 }
+#endif
 
+#if 0
 static bool
 xlate_execute_odp_actions(struct dp_packet *packet,
                           const struct nlattr *actions, int actions_len)
@@ -4232,30 +4235,21 @@ xlate_execute_odp_actions(struct dp_packet *packet,
 
     return true;
 }
+#endif
 
+/* xxx Should this be called xlate_controller_action()? */
 static void
 execute_controller_action(struct xlate_ctx *ctx, int len,
                           enum ofp_packet_in_reason reason,
                           uint16_t controller_id,
                           const uint8_t *userdata, size_t userdata_len)
 {
-    struct dp_packet *packet;
-
-    ctx->xout->slow |= SLOW_CONTROLLER;
     xlate_commit_actions(ctx);
     if (!ctx->xin->packet) {
         return;
     }
 
     if (!ctx->xin->allow_side_effects && !ctx->xin->xcache) {
-        return;
-    }
-
-    packet = dp_packet_clone(ctx->xin->packet);
-    if (!xlate_execute_odp_actions(packet, ctx->odp_actions->data,
-                                  ctx->odp_actions->size)) {
-        xlate_report_error(ctx, "Failed to execute controller action");
-        dp_packet_delete(packet);
         return;
     }
 
@@ -4267,44 +4261,67 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
         reason = OFPR_EXPLICIT_MISS;
     }
 
-    size_t packet_len = dp_packet_size(packet);
-
-    struct ofproto_async_msg *am = xmalloc(sizeof *am);
-    *am = (struct ofproto_async_msg) {
-        .controller_id = controller_id,
-        .oam = OAM_PACKET_IN,
-        .pin = {
-            .up = {
-                .public = {
-                    .packet = dp_packet_steal_data(packet),
-                    .packet_len = packet_len,
-                    .reason = reason,
-                    .table_id = ctx->table_id,
-                    .cookie = ctx->rule_cookie,
-                    .userdata = (userdata_len
-                                 ? xmemdup(userdata, userdata_len)
-                                 : NULL),
-                    .userdata_len = userdata_len,
-                }
-            },
-            .max_len = len,
-        },
+    /* xxx Duplicated from finish_freezing__() */
+    /* xxx Is all this needed? */
+    struct frozen_state state = {
+        .table_id = ctx->table_id,
+        .ofproto_uuid = ctx->xbridge->ofproto->uuid,
+        .stack = ctx->stack.data,
+        .stack_size = ctx->stack.size,
+        .mirrors = ctx->mirrors,
+        .conntracked = ctx->conntracked,
+        .ofpacts = NULL,
+        .ofpacts_len = 0,
+        .action_set = NULL,
+        .action_set_len = 0
     };
-    flow_get_metadata(&ctx->xin->flow, &am->pin.up.public.flow_metadata);
+    frozen_metadata_from_flow(&state.metadata, &ctx->xin->flow);
+    state.ofproto = ctx->xbridge->ofproto;
 
-    /* Async messages are only sent once, so if we send one now, no
-     * xlate cache entry is created.  */
-    if (ctx->xin->allow_side_effects) {
-        ofproto_dpif_send_async_msg(ctx->xbridge->ofproto, am);
-    } else /* xcache */ {
-        struct xc_entry *entry;
-
-        entry = xlate_cache_add_entry(ctx->xin->xcache, XC_CONTROLLER);
-        entry->controller.ofproto = ctx->xbridge->ofproto;
-        entry->controller.am = am;
+    uint32_t recirc_id = recirc_alloc_id_ctx(&state);
+    if (!recirc_id) {
+        xlate_report_error(ctx, "Failed to allocate recirculation id");
+        ctx->error = XLATE_NO_RECIRCULATION_CONTEXT;
+        return;
     }
 
-    dp_packet_delete(packet);
+    union user_action_cookie *cookie;
+    cookie = xmalloc(sizeof cookie->controller + userdata_len);
+
+    memset(&cookie->controller, 0, sizeof cookie->controller);
+    cookie->controller.type = USER_ACTION_COOKIE_CONTROLLER,
+    cookie->controller.recirc_id = recirc_id, /* xxx leaks */
+    cookie->controller.max_len = len,
+    cookie->controller.controller_id = controller_id,
+    cookie->controller.reason = reason,
+    cookie->controller.userdata_len = userdata_len,
+    put_32aligned_be64(&cookie->controller.rule_cookie, ctx->rule_cookie);
+    memcpy(cookie->controller.userdata, userdata, userdata_len);
+
+    size_t offset;
+    size_t ac_offset;
+    uint32_t meter_id = ctx->xbridge->ofproto->up.controller_meter_id;
+    if (meter_id != UINT32_MAX) {
+        /* If slowpath meter is configured, generate clone(meter, userspace)
+         * action. */
+        offset = nl_msg_start_nested(ctx->odp_actions, OVS_ACTION_ATTR_SAMPLE);
+        nl_msg_put_u32(ctx->odp_actions, OVS_SAMPLE_ATTR_PROBABILITY,
+                       UINT32_MAX);
+        ac_offset = nl_msg_start_nested(ctx->odp_actions,
+                                        OVS_SAMPLE_ATTR_ACTIONS);
+        nl_msg_put_u32(ctx->odp_actions, OVS_ACTION_ATTR_METER, meter_id);
+    }
+
+    odp_put_userspace_action(0, cookie,
+                             sizeof cookie->controller + userdata_len,
+                             ODPP_NONE, false, ctx->odp_actions);
+
+    if (meter_id != UINT32_MAX) {
+        nl_msg_end_nested(ctx->odp_actions, ac_offset);
+        nl_msg_end_nested(ctx->odp_actions, offset);
+    }
+
+    free(cookie);
 }
 
 static void
@@ -5615,7 +5632,7 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             controller = ofpact_get_CONTROLLER(a);
             if (controller->pause) {
                 ctx->pause = controller;
-                ctx->xout->slow |= SLOW_CONTROLLER;
+                ctx->xout->slow |= SLOW_FREEZE;   // xxx Is this right?
                 ctx_trigger_freeze(ctx);
                 a = ofpact_next(a);
             } else {

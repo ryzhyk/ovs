@@ -781,11 +781,9 @@ table=1 in_port=1 action=dec_ttl,output:3
 ])
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=111,tos=0,ttl=2,frag=no)' -generate], [0], [stdout])
-AT_CHECK([tail -4 stdout], [0],
+AT_CHECK([tail -2 stdout], [0],
   [Megaflow: recirc_id=0,ip,in_port=1,nw_ttl=2,nw_frag=no
-Datapath actions: set(ipv4(ttl=1)),2,4
-This flow is handled by the userspace slow path because it:
-	- Sends "packet-in" messages to the OpenFlow controller.
+Datapath actions: set(ipv4(ttl=1)),2,userspace(pid=0,controller(reason=2,recirc_id=1,rule_cookie=0,controller_id=0,max_len=65535,userdata_len=0)),4
 ])
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=111,tos=0,ttl=3,frag=no)'], [0], [stdout])
 AT_CHECK([tail -2 stdout], [0],
@@ -800,7 +798,10 @@ Datapath actions: set(ipv6(hlimit=127)),2,set(ipv6(hlimit=126)),3,4
 
 AT_CAPTURE_FILE([ofctl_monitor.log])
 AT_CHECK([ovs-ofctl -P nxt_packet_in monitor br0 65534 invalid_ttl --detach --no-chdir --pidfile 2> ofctl_monitor.log])
-AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=111,tos=0,ttl=2,frag=no)' -generate], [0], [stdout])
+
+dnl xxx Should ofproto/trace be generating packet-in side-effects?
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=111,tos=0,ttl=2,frag=no)'])
 OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
 NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=34 in_port=1 (via invalid_ttl) data_len=34 (unbuffered)
@@ -1649,7 +1650,7 @@ OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
 
 AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/.*\(packets:\)/\1/' | sed 's/used:[[0-9]].[[0-9]]*s/used:0.001s/'], [0], [dnl
 flow-dump from non-dpdk interfaces:
-packets:1, bytes:14, used:0.001s, actions:userspace(pid=0,slow_path(controller))
+packets:1, bytes:14, used:0.001s, actions:userspace(pid=0,controller(reason=1,recirc_id=1,rule_cookie=0,controller_id=0,max_len=65535,userdata_len=0))
 ])
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
@@ -1663,7 +1664,7 @@ AT_CHECK([ovs-appctl revalidator/purge])
 AT_CHECK([ovs-ofctl monitor br0 65534 invalid_ttl -P nxt_packet_in --detach --no-chdir --pidfile 2> ofctl_monitor.log])
 
 dnl Add a controller meter.
-AT_CHECK([ovs-ofctl -O OpenFlow13 add-meter br0 'meter=controller pktps stats bands=type=drop rate=1'])
+AT_CHECK([ovs-ofctl -O OpenFlow13 add-meter br0 'meter=controller pktps stats bands=type=drop rate=2'])
 
 dnl Advance time by 1 second.
 AT_CHECK([ovs-appctl time/warp 1000], [0], [ignore])
@@ -1674,15 +1675,14 @@ done
 
 AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/.*\(packets:\)/\1/' | sed 's/used:[[0-9]].[[0-9]]*s/used:0.001s/'], [0], [dnl
 flow-dump from non-dpdk interfaces:
-packets:7, bytes:98, used:0.001s, actions:sample(sample=100.0%,actions(meter(0),userspace(pid=0,slow_path(controller))))
+packets:7, bytes:98, used:0.001s, actions:sample(sample=100.0%,actions(meter(0),userspace(pid=0,controller(reason=1,recirc_id=1,rule_cookie=0,controller_id=0,max_len=65535,userdata_len=0))))
 ])
 
 AT_CHECK([ovs-appctl time/warp 1], [0], [ignore])
 OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
 
-dnl Out of 8 packets we sent, one executes the controller action via
-dnl miss upcall. Another one got passed the rate limiter.
-dnl The rest of packets are blocked by the rate limiter.
+dnl Out of 8 packets we sent, two were passed by the rate limiter, and
+dnl the rest of packets were blocked.
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
 NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=14 in_port=1 (via action) data_len=14 (unbuffered)
 vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,dl_type=0x4321
@@ -1693,7 +1693,7 @@ dnl Check meter stats to make it gives the same picture;
 dnl 7 packets hit the meter, but 6 packets are dropped by band0.
 AT_CHECK([ovs-ofctl -O OpenFlow13 meter-stats br0 | strip_timers], [0], [dnl
 OFPST_METER reply (OF1.3) (xid=0x2):
-meter:controller flow_count:0 packet_in_count:7 byte_in_count:98 duration:0.0s bands:
+meter:controller flow_count:0 packet_in_count:8 byte_in_count:112 duration:0.0s bands:
 0: packet_count:6 byte_count:84
 ])
 
@@ -7306,8 +7306,8 @@ for dl_src in 00 01; do
 done
 sleep 1  # wait for the datapath flow installed
 AT_CHECK_UNQUOTED([strip_ufid < ovs-vswitchd.log | filter_flow_install | strip_used], [0], [dnl
-recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=60:66:66:66:66:00),eth_type(0x8847),mpls(label=20,tc=0,ttl=32,bos=0,label=20,tc=0,ttl=32,bos=1), actions:userspace(pid=0,slow_path(controller))
-recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=60:66:66:66:66:01),eth_type(0x8847),mpls(label=20/0x0,tc=0/0,ttl=32/0x0,bos=0/1,label=20/0xfffff,tc=0/7,ttl=32/0xff,bos=1/1), actions:userspace(pid=0,slow_path(controller))
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=60:66:66:66:66:00),eth_type(0x8847),mpls(label=20,tc=0,ttl=32,bos=0,label=20,tc=0,ttl=32,bos=1), actions:push_mpls(label=20,tc=0,ttl=32,bos=0,eth_type=0x8847),userspace(pid=0,controller(reason=1,recirc_id=1,rule_cookie=0,controller_id=0,max_len=65535,userdata_len=0))
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=60:66:66:66:66:01),eth_type(0x8847),mpls(label=20/0x0,tc=0/0,ttl=32/0x0,bos=0/1,label=20/0xfffff,tc=0/7,ttl=32/0xff,bos=1/1), actions:pop_mpls(eth_type=0x8847),userspace(pid=0,controller(reason=1,recirc_id=1,rule_cookie=0,controller_id=0,max_len=65535,userdata_len=0))
 ])
 
 OVS_VSWITCHD_STOP
@@ -7328,6 +7328,8 @@ dl_src=60:66:66:66:66:01 actions=pop_mpls:0x8847,controller
 ])
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
+dnl xxx This test doesn't seem to do what it claims.
+
 dnl Packet is dropped because an MPLS PUSH action is applied to a packet with
 dnl 4 MPLS LSEs but ovs-vswtichd can only handle up to 3 MPLS LSEs and thus
 dnl can't determine the resulting MPLS label after MPLS push/pop actions.
@@ -7345,8 +7347,8 @@ for dl_src in 00 01; do
 done
 sleep 1  # wait for the datapath flow installed
 AT_CHECK_UNQUOTED([strip_ufid < ovs-vswitchd.log | filter_flow_install | strip_used], [0], [dnl
-recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=60:66:66:66:66:00),eth_type(0x8847),mpls(label=20,tc=0,ttl=32,bos=0,label=20,tc=0,ttl=32,bos=1), actions:userspace(pid=0,slow_path(controller))
-recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=60:66:66:66:66:01),eth_type(0x8847),mpls(label=20/0x0,tc=0/0,ttl=32/0x0,bos=0/1,label=20/0xfffff,tc=0/7,ttl=32/0xff,bos=1/1), actions:userspace(pid=0,slow_path(controller))
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=60:66:66:66:66:00),eth_type(0x8847),mpls(label=20,tc=0,ttl=32,bos=0,label=20,tc=0,ttl=32,bos=1), actions:push_mpls(label=20,tc=0,ttl=32,bos=0,eth_type=0x8847),userspace(pid=0,controller(reason=1,recirc_id=1,rule_cookie=0,controller_id=0,max_len=65535,userdata_len=0))
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=60:66:66:66:66:01),eth_type(0x8847),mpls(label=20/0x0,tc=0/0,ttl=32/0x0,bos=0/1,label=20/0xfffff,tc=0/7,ttl=32/0xff,bos=1/1), actions:pop_mpls(eth_type=0x8847),userspace(pid=0,controller(reason=1,recirc_id=1,rule_cookie=0,controller_id=0,max_len=65535,userdata_len=0))
 ])
 
 OVS_VSWITCHD_STOP
