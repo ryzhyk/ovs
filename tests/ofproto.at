@@ -3430,7 +3430,7 @@ udp,vlan_tci=0x0000,dl_src=00:26:b9:8c:b0:f9,dl_dst=00:25:83:df:b4:00,nw_src=172
     ovs-ofctl -O OpenFlow13 add-flow br0 send_flow_rem,actions=group:1234
     ovs-ofctl -O OpenFlow13 --strict del-groups br0 group_id=1234
     if test X"$1" = X"OFPRR_DELETE"; then shift;
-        echo >>expout "OFPT_FLOW_REMOVED (OF1.3):  reason=gropu_delete table_id=0"
+        echo >>expout "OFPT_FLOW_REMOVED (OF1.3):  reason=group_delete table_id=0"
     fi
 
     AT_FAIL_IF([test X"$1" != X])
