@@ -139,6 +139,7 @@ frozen_state_hash(const struct frozen_state *state)
         hash = hash_bytes64(ALIGNED_CAST(const uint64_t *, state->action_set),
                             state->action_set_len, hash);
     }
+    hash = hash_int(state->ofpacts_len, hash);
     if (state->ofpacts_len) {
         hash = hash_bytes64(ALIGNED_CAST(const uint64_t *, state->ofpacts),
                             state->ofpacts_len, hash);
