@@ -4501,11 +4501,12 @@ odp_flow_key_from_flow__(const struct odp_flow_key_parms *parms,
         if (parms->support.ct_orig_tuple
             && flow->dl_type == htons(ETH_TYPE_IP)) {
             struct ovs_key_ct_tuple_ipv4 ct = {
-                data->ct_nw_src,
-                data->ct_nw_dst,
-                data->ct_tp_src,
-                data->ct_tp_dst,
-                data->ct_nw_proto,
+                .ipv4_src = data->ct_nw_src,
+                .ipv4_dst = data->ct_nw_dst,
+                .src_port = data->ct_tp_src,
+                .dst_port = data->ct_tp_dst,
+                .ipv4_proto = data->ct_nw_proto,
+                .pad = { 0, 0, 0 }
             };
             nl_msg_put_unspec(buf, OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV4, &ct,
                               sizeof ct);

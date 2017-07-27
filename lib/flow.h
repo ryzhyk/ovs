@@ -937,6 +937,7 @@ pkt_metadata_from_flow(struct pkt_metadata *md, const struct flow *flow)
                 flow->ct_tp_src,
                 flow->ct_tp_dst,
                 flow->ct_nw_proto,
+                { 0, 0, 0 }
             };
         } else if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
             md->ct_orig_tuple_ipv6 = true;

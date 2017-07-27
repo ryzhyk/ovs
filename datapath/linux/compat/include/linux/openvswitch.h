@@ -512,6 +512,7 @@ struct ovs_key_ct_tuple_ipv4 {
 	__be16 src_port;
 	__be16 dst_port;
 	__u8   ipv4_proto;
+    __u8 pad[3];
 };
 
 struct ovs_key_ct_tuple_ipv6 {

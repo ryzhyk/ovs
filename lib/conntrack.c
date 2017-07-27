@@ -222,6 +222,7 @@ write_ct_md(struct dp_packet *pkt, uint16_t zone, const struct conn *conn,
                 key->nw_proto != IPPROTO_ICMP
                 ? key->dst.port : htons(key->src.icmp_code),
                 key->nw_proto,
+                {0, 0, 0}
             };
         } else {
             pkt->md.ct_orig_tuple_ipv6 = true;
