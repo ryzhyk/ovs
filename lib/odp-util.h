@@ -43,7 +43,6 @@ struct pkt_metadata;
     SPR(SLOW_LACP,       "lacp",       "Consists of LACP packets")      \
     SPR(SLOW_STP,        "stp",        "Consists of STP packets")       \
     SPR(SLOW_LLDP,       "lldp",       "Consists of LLDP packets")      \
-    SPR(SLOW_PAUSE,      "pause",      "Controller action with pause")  \
     SPR(SLOW_ACTION,     "action",                                      \
         "Uses action(s) not supported by datapath")
 
@@ -303,6 +302,7 @@ enum user_action_cookie_type {
 /* Flags for controller cookies. */
 enum user_action_controller_flags {
     UACF_DONT_SEND    = 1 << 0,      /* Don't send the packet to controller. */
+    UACF_CONTINUATION = 1 << 1,      /* Send packet-in as a continuation. */
 };
 
 /* user_action_cookie is passed as argument to OVS_ACTION_ATTR_USERSPACE. */
