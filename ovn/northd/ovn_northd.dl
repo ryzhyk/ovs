@@ -1248,6 +1248,50 @@ for (ls in nb.Logical_Switch) {
     }
 }
 
+/* pre-stateful */
+for (ls in nb.Logical_Switch) {
+    var lsname = uuid2str(ls._uuid) in {
+        /* Ingress and Egress pre-stateful Table (Priority 0): Packets are
+         * allowed by default. */
+        sb.Out_Logical_Flow(
+            .logical_datapath = lsname,
+            .pipeline         = "ingress",
+            .table_id         = switch_stage(IN, PRE_STATEFUL),
+            .priority         = 0,
+            .__match          = "1",
+            .actions          = "next;",
+            .external_ids     = map_empty());
+        sb.Out_Logical_Flow(
+            .logical_datapath = lsname,
+            .pipeline         = "egress",
+            .table_id         = switch_stage(OUT, PRE_STATEFUL),
+            .priority         = 0,
+            .__match          = "1",
+            .actions          = "next;",
+            .external_ids     = map_empty());
+
+        /* If REGBIT_CONNTRACK_DEFRAG is set as 1, then the packets should be
+         * sent to conntrack for tracking and defragmentation. */
+        sb.Out_Logical_Flow(
+            .logical_datapath = lsname,
+            .pipeline         = "ingress",
+            .table_id         = switch_stage(IN, PRE_STATEFUL),
+            .priority         = 100,
+            .__match          = $"${rEGBIT_CONNTRACK_DEFRAG()} == 1",
+            .actions          = "ct_next;",
+            .external_ids     = map_empty());
+        sb.Out_Logical_Flow(
+            .logical_datapath = lsname,
+            .pipeline         = "egress",
+            .table_id         = switch_stage(OUT, PRE_STATEFUL),
+            .priority         = 100,
+            .__match          = $"${rEGBIT_CONNTRACK_DEFRAG()} == 1",
+            .actions          = "ct_next;",
+            .external_ids     = map_empty())
+    }
+}
+
+
 /* Logical switch ingress table 0: ingress port security - L2 (priority 50)
                   ingress table 1: ingress port security - IP (priority 90 and 80)
                   ingress table 2: ingress port security - ND (priority 90 and 80) */
