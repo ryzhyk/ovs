@@ -63,6 +63,9 @@ ovn/northd/ovn_northd_ddlog/target/debug/ovn_northd_cli: \
 ovn/northd/ovn_northd_ddlog/target/debug/libovn_northd_ddlog.la: \
 	ovn/northd/ovn_northd_ddlog/target/debug/ovn_northd_cli
 
+ovn/northd/ovn_northd_ddlog/ovn_northd_ddlog.h: \
+	ovn/northd/ovn_northd_ddlog/target/debug/ovn_northd_cli
+
 ovn_northd_ovn_northd_SOURCES += \
 	ovn/northd/ovn_northd_ddlog/ovn_northd_ddlog.h
 
