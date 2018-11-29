@@ -181,6 +181,25 @@ pub fn ovn_scan_eth_addr(s: &arcval::DDString) -> std_Option<ovn_eth_addr> {
     }
 }
 
+pub fn ovn_ip_address_and_port_from_lb_key(k: &arcval::DDString) ->
+    std_Option<(arcval::DDString, u16, u32)> {
+        unsafe {
+        let mut ip_address: *mut raw::c_char = ptr::null_mut();
+        let mut port: libc::uint16_t = 0;
+        let mut addr_family: raw::c_int = 0;
+
+        ip_address_and_port_from_lb_key(ddstring2cstr(k).as_ptr(), &mut ip_address as *mut *mut raw::c_char,
+                                &mut port as *mut libc::uint16_t, &mut addr_family as *mut raw::c_int);
+        if (ip_address == ptr::null_mut()) {
+            std_Option::std_None
+        } else {
+            let res = (cstr2ddstring(ip_address), port as u16, addr_family as u32);
+            free(ip_address as *mut raw::c_void);
+            std_Option::std_Some{x: res}
+        }
+    }
+}
+
 /* Internals */
 
 unsafe fn cstr2string(s: *const raw::c_char) -> String {
@@ -384,6 +403,8 @@ extern "C" {
     fn destroy_lport_addresses(addrs: *mut lport_addresses);
     fn is_dynamic_lsp_address(address: *const raw::c_char) -> bool;
     fn split_addresses(addresses: *const raw::c_char, ip4_addrs: *mut ovs_svec, ipv6_addrs: *mut ovs_svec);
+    fn ip_address_and_port_from_lb_key(key: *const raw::c_char, ip_address: *mut *mut raw::c_char,
+                                port: *mut libc::uint16_t, addr_family: *mut raw::c_int);
 }
 
 /* functions imported from libopenvswitch */

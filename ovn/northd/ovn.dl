@@ -41,6 +41,11 @@ typedef lport_addresses = LPortAddress {
     ipv6_addrs: Vec<ipv6_netaddr>
 }
 
+/* Standard libc address family values */
+/* FIXME: sparse/sys/socket.h defines different AF constants. Do we have to support that? */
+function aF_INET(): bit<32> = 2
+function aF_INET6(): bit<32> = 10
+
 extern function warn(msg: string): ()
 
 /*
@@ -65,3 +70,7 @@ extern function json_string_escape(s: string): string
 
 extern function ip_parse_masked(s: string): Either<string/*err*/, (ovs_be32/*host_ip*/, ovs_be32/*mask*/)>
 extern function eth_addr_from_string(s: string): Option<eth_addr>
+
+/* For a 'key' of the form "IP:port" or just "IP", returns
+ * (IP address, port, address family) tuple. */
+extern function ip_address_and_port_from_lb_key(k: string): Option<(string, bit<16>, bit<32>)>

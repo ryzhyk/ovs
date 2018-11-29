@@ -1030,6 +1030,7 @@ LogicalSwitchLocalnetPort(ls, port) :-
     var port = FlatMap(ports),
     nb.Logical_Switch_Port(._uuid = port, .__type = "localnet").
 
+/* Pre-ACL */
 for (ls in nb.Logical_Switch) {
     var lsname = uuid2str(ls._uuid) in {
         /* Ingress and Egress Pre-ACL Table (Priority 0): Packets are
@@ -1150,6 +1151,95 @@ for (ls in nb.Logical_Switch) {
                 .logical_datapath = lsname,
                 .pipeline         = "egress",
                 .table_id         = switch_stage(OUT, PRE_ACL),
+                .priority         = 100,
+                .__match          = "ip",
+                .actions          = $"${rEGBIT_CONNTRACK_DEFRAG()} = 1; next;",
+                .external_ids     = map_empty())
+        }
+    }
+}
+
+/* Load balancer VIPs associated with Logical_Switch */
+relation LogicalSwitchLBVIP(ls: uuid, vip: (string, string))
+
+LogicalSwitchLBVIP(ls, vip) :-
+    nb.Logical_Switch(._uuid = ls, .load_balancer = lb_ids),
+    var lb_id = FlatMap(lb_ids),
+    nb.Load_Balancer(._uuid = lb_id, .vips = vips),
+    var vip = FlatMap(vips).
+
+relation LogicalSwitchHasLBVIP(ls: uuid)
+
+LogicalSwitchHasLBVIP(ls) :-
+    LogicalSwitchLBVIP(ls, _).
+
+/* pre-LB */
+for (ls in nb.Logical_Switch) {
+    var lsname = uuid2str(ls._uuid) in {
+        /* Do not send ND packets to conntrack */
+        sb.Out_Logical_Flow(
+            .logical_datapath = lsname,
+            .pipeline         = "ingress",
+            .table_id         = switch_stage(IN, PRE_LB),
+            .priority         = 110,
+            .__match          = "nd || nd_rs || nd_ra",
+            .actions          = "next;",
+            .external_ids     = map_empty());
+        sb.Out_Logical_Flow(
+            .logical_datapath = lsname,
+            .pipeline         = "egress",
+            .table_id         = switch_stage(OUT, PRE_LB),
+            .priority         = 110,
+            .__match          = "nd || nd_rs || nd_ra",
+            .actions          = "next;",
+            .external_ids     = map_empty());
+
+        /* Allow all packets to go to next tables by default. */
+        sb.Out_Logical_Flow(
+            .logical_datapath = lsname,
+            .pipeline         = "ingress",
+            .table_id         = switch_stage(IN, PRE_LB),
+            .priority         = 0,
+            .__match          = "1",
+            .actions          = "next;",
+            .external_ids     = map_empty());
+        sb.Out_Logical_Flow(
+            .logical_datapath = lsname,
+            .pipeline         = "egress",
+            .table_id         = switch_stage(OUT, PRE_LB),
+            .priority         = 0,
+            .__match          = "1",
+            .actions          = "next;",
+            .external_ids     = map_empty());
+
+        /* 'REGBIT_CONNTRACK_DEFRAG' is set to let the pre-stateful table send
+         * packet to conntrack for defragmentation. */
+        for (LogicalSwitchLBVIP(ls._uuid, vip)) {
+            (var k, _) = vip in
+            /* Ignore L4 port information in the key because fragmented packets
+             * may not have L4 information.  The pre-stateful table will send
+             * the packet through ct() action to de-fragment. In stateful
+             * table, we will eventually look at L4 information. */
+            Some{(var ip_address, _, var addr_family)} = ip_address_and_port_from_lb_key(k) in
+            var __match = if (addr_family == aF_INET()) {
+                   $"ip && ip4.dst == ${ip_address}"
+                } else {
+                   $"ip && ip6.dst == ${ip_address}"
+                } in
+            sb.Out_Logical_Flow(
+                .logical_datapath = lsname,
+                .pipeline         = "ingress",
+                .table_id         = switch_stage(IN, PRE_LB),
+                .priority         = 100,
+                .__match          = __match,
+                .actions          = $"${rEGBIT_CONNTRACK_DEFRAG()} = 1; next;",
+                .external_ids     = map_empty())
+        };
+        for (LogicalSwitchHasLBVIP(ls._uuid)) {
+            sb.Out_Logical_Flow(
+                .logical_datapath = lsname,
+                .pipeline         = "egress",
+                .table_id         = switch_stage(OUT, PRE_LB),
                 .priority         = 100,
                 .__match          = "ip",
                 .actions          = $"${rEGBIT_CONNTRACK_DEFRAG()} = 1; next;",
