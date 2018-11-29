@@ -12,6 +12,9 @@ EXTRA_DIST += ovn/northd/ovn_northd.dl ovn/northd/ovn.dl ovn/northd/ovn.rs
 CLEANFILES += ovn/northd/ovn-northd.8
 
 if DDLOG
+
+ovn/northd/ovn-northd.c: ovn/northd/ovn_northd_ddlog/ovn_northd_ddlog.h
+
 ovn/northd/OVN_Northbound.dl: ovn/ovn-nb.ovsschema
 	ovsdb2ddlog -f ovn/ovn-nb.ovsschema  > $@
 
