@@ -1803,10 +1803,6 @@ join_logical_ports(struct northd_context *ctx,
 }
 
 static void
-ip_address_and_port_from_lb_key(const char *key, char **ip_address,
-                                uint16_t *port, int *addr_family);
-
-static void
 get_router_load_balancer_ips(const struct ovn_datapath *od,
                              struct sset *all_ips, int *addr_family)
 {
@@ -3239,30 +3235,6 @@ build_pre_acls(struct ovn_datapath *od, struct hmap *lflows)
         ovn_lflow_add(lflows, od, S_SWITCH_OUT_PRE_ACL, 100, "ip",
                       REGBIT_CONNTRACK_DEFRAG" = 1; next;");
     }
-}
-
-/* For a 'key' of the form "IP:port" or just "IP", sets 'port' and
- * 'ip_address'.  The caller must free() the memory allocated for
- * 'ip_address'. */
-static void
-ip_address_and_port_from_lb_key(const char *key, char **ip_address,
-                                uint16_t *port, int *addr_family)
-{
-    struct sockaddr_storage ss;
-    if (!inet_parse_active(key, 0, &ss, false)) {
-        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
-        VLOG_WARN_RL(&rl, "bad ip address or port for load balancer key %s",
-                     key);
-        return;
-    }
-
-    struct ds s = DS_EMPTY_INITIALIZER;
-    ss_format_address_nobracks(&ss, &s);
-    *ip_address = ds_steal_cstr(&s);
-
-    *port = ss_get_port(&ss);
-
-    *addr_family = ss.ss_family;
 }
 
 /*
