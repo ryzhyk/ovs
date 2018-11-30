@@ -1787,6 +1787,115 @@ for (ls in nb.Logical_Switch) {
     }
 }
 
+relation LogicalSwitchQoS(ls: uuid, qos_rule: uuid)
+
+LogicalSwitchQoS(ls, qos_rule) :-
+    nb.Logical_Switch(._uuid = ls, .qos_rules = qos_rules),
+    var qos_rule = FlatMap(qos_rules).
+
+relation QoSAction(qos: uuid, key_action: string, value_action: integer)
+
+QoSAction(qos, k, v) :-
+    nb.QoS(._uuid = qos, .action = actions),
+    var action = FlatMap(actions),
+    (var k, var v) = action.
+
+/* QoS rules */
+for (ls in nb.Logical_Switch) {
+    var lsname = uuid2str(ls._uuid) in {
+        sb.Out_Logical_Flow(
+            .logical_datapath = lsname,
+            .pipeline         = "ingress",
+            .table_id         = switch_stage(IN, QOS_MARK),
+            .priority         = 0,
+            .__match          = "1",
+            .actions          = "next;",
+            .external_ids     = map_empty());
+        sb.Out_Logical_Flow(
+            .logical_datapath = lsname,
+            .pipeline         = "egress",
+            .table_id         = switch_stage(OUT, QOS_MARK),
+            .priority         = 0,
+            .__match          = "1",
+            .actions          = "next;",
+            .external_ids     = map_empty());
+        sb.Out_Logical_Flow(
+            .logical_datapath = lsname,
+            .pipeline         = "ingress",
+            .table_id         = switch_stage(IN, QOS_METER),
+            .priority         = 0,
+            .__match          = "1",
+            .actions          = "next;",
+            .external_ids     = map_empty());
+        sb.Out_Logical_Flow(
+            .logical_datapath = lsname,
+            .pipeline         = "egress",
+            .table_id         = switch_stage(OUT, QOS_METER),
+            .priority         = 0,
+            .__match          = "1",
+            .actions          = "next;",
+            .external_ids     = map_empty());
+
+        for (LogicalSwitchQoS(ls._uuid, qos_rule_id)) {
+            for(qos in nb.QoS(._uuid = qos_rule_id)) {
+                var ingress = if (qos.direction == "from-lport") true else false in
+                var pipeline = if ingress "ingress" else "egress" in {
+                    var stage = if ingress switch_stage(IN, QOS_MARK) else switch_stage(OUT, QOS_MARK) in
+                    /* FIXME: Can value_action be negative */
+                    for (QoSAction(qos_rule_id, key_action, value_action)) {
+                        if (key_action == "dscp") {
+                            sb.Out_Logical_Flow(
+                                .logical_datapath = lsname,
+                                .pipeline         = pipeline,
+                                .table_id         = stage,
+                                .priority         = qos.priority,
+                                .__match          = qos.__match,
+                                .actions          = $"ip.dscp = ${value_action}; next;",
+                                .external_ids     = map_empty())
+                        }
+                    };
+
+                    (var burst: bit<64>, var rate: bit<64>) = {
+                        var rate: bit<64> = 0;
+                        var burst: bit<64> = 0;
+                        for (bw in qos.bandwidth) {
+                            /* FIXME: Can value_bandwidth be negative? */
+                            (var key_bandwidth, var value_bandwidth) = bw;
+                            if (key_bandwidth == "rate") {
+                                rate = value_bandwidth
+                            } else if (key_bandwidth == "burst") {
+                                burst = value_bandwidth
+                            } else ()
+                        };
+                        (burst, rate)
+                    } in
+                    if (rate != 0) {
+                        var stage = if (ingress) switch_stage(IN, QOS_METER) else switch_stage(OUT, QOS_METER) in
+                        var meter_action = if (burst != 0) {
+                                $"set_meter(${rate}, ${burst}); next;"
+                            } else {
+                                $"set_meter(${rate}); next;"
+                            } in
+                        /* Ingress and Egress QoS Meter Table.
+                         *
+                         * We limit the bandwidth of this flow by adding a meter table.
+                         */
+                        sb.Out_Logical_Flow(
+                            .logical_datapath = lsname,
+                            .pipeline         = pipeline,
+                            .table_id         = stage,
+                            .priority         = qos.priority,
+                            .__match          = qos.__match,
+                            .actions          = meter_action,
+                            .external_ids     = map_empty())
+                    }
+                }
+            }
+        }
+    }
+}
+
+
 /* Logical switch ingress table 0: ingress port security - L2 (priority 50)
                   ingress table 1: ingress port security - IP (priority 90 and 80)
                   ingress table 2: ingress port security - ND (priority 90 and 80) */
