@@ -1895,6 +1895,51 @@ for (ls in nb.Logical_Switch) {
     }
 }
 
+/* LB rules */
+for (ls in nb.Logical_Switch) {
+    var lsname = uuid2str(ls._uuid) in {
+        /* Ingress and Egress LB Table (Priority 0): Packets are allowed by
+         * default.  */
+        sb.Out_Logical_Flow(
+            .logical_datapath = lsname,
+            .pipeline         = "ingress",
+            .table_id         = switch_stage(IN, LB),
+            .priority         = 0,
+            .__match          = "1",
+            .actions          = "next;",
+            .external_ids     = map_empty());
+        sb.Out_Logical_Flow(
+            .logical_datapath = lsname,
+            .pipeline         = "egress",
+            .table_id         = switch_stage(OUT, LB),
+            .priority         = 0,
+            .__match          = "1",
+            .actions          = "next;",
+            .external_ids     = map_empty());
+
+        if (not set_is_empty(ls.load_balancer)) {
+            /* Ingress and Egress LB Table (Priority 65535).
+             *
+             * Send established traffic through conntrack for just NAT. */
+            sb.Out_Logical_Flow(
+                .logical_datapath = lsname,
+                .pipeline         = "ingress",
+                .table_id         = switch_stage(IN, LB),
+                .priority         = 65535,
+                .__match          = "ct.est && !ct.rel && !ct.new && !ct.inv",
+                .actions          = $"${rEGBIT_CONNTRACK_NAT()} = 1; next;",
+                .external_ids     = map_empty());
+            sb.Out_Logical_Flow(
+                .logical_datapath = lsname,
+                .pipeline         = "egress",
+                .table_id         = switch_stage(OUT, LB),
+                .priority         = 65535,
+                .__match          = "ct.est && !ct.rel && !ct.new && !ct.inv",
+                .actions          = $"${rEGBIT_CONNTRACK_NAT()} = 1; next;",
+                .external_ids     = map_empty())
+        }
+    }
+}
 
 /* Logical switch ingress table 0: ingress port security - L2 (priority 50)
                   ingress table 1: ingress port security - IP (priority 90 and 80)
