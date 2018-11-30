@@ -1172,14 +1172,26 @@ for (ls in nb.Logical_Switch) {
     }
 }
 
+
+
+relation LogicalSwitchLB(ls: uuid, lb: uuid)
+
+LogicalSwitchLB(ls, lb) :-
+    nb.Logical_Switch(._uuid = ls, .load_balancer = lb_ids),
+    var lb = FlatMap(lb_ids).
+
+relation LBVIP(lb: uuid, vip: (string, string))
+
+LBVIP(lb, vip) :-
+    nb.Load_Balancer(._uuid = lb, .vips = vips),
+    var vip = FlatMap(vips).
+
 /* Load balancer VIPs associated with Logical_Switch */
 relation LogicalSwitchLBVIP(ls: uuid, vip: (string, string))
 
 LogicalSwitchLBVIP(ls, vip) :-
-    nb.Logical_Switch(._uuid = ls, .load_balancer = lb_ids),
-    var lb_id = FlatMap(lb_ids),
-    nb.Load_Balancer(._uuid = lb_id, .vips = vips),
-    var vip = FlatMap(vips).
+    LogicalSwitchLB(ls, lb_id),
+    LBVIP(lb_id, vip).
 
 relation LogicalSwitchHasLBVIP(ls: uuid)
 
@@ -1940,6 +1952,121 @@ for (ls in nb.Logical_Switch) {
         }
     }
 }
+
+/* stateful rules */
+for (ls in nb.Logical_Switch) {
+    var lsname = uuid2str(ls._uuid) in {
+        /* Ingress and Egress stateful Table (Priority 0): Packets are
+         * allowed by default. */
+        sb.Out_Logical_Flow(
+            .logical_datapath = lsname,
+            .pipeline         = "ingress",
+            .table_id         = switch_stage(IN, STATEFUL),
+            .priority         = 0,
+            .__match          = "1",
+            .actions          = "next;",
+            .external_ids     = map_empty());
+        sb.Out_Logical_Flow(
+            .logical_datapath = lsname,
+            .pipeline         = "egress",
+            .table_id         = switch_stage(OUT, STATEFUL),
+            .priority         = 0,
+            .__match          = "1",
+            .actions          = "next;",
+            .external_ids     = map_empty());
+
+        /* If REGBIT_CONNTRACK_COMMIT is set as 1, then the packets should be
+         * committed to conntrack. We always set ct_label.blocked to 0 here as
+         * any packet that makes it this far is part of a connection we
+         * want to allow to continue. */
+        sb.Out_Logical_Flow(
+            .logical_datapath = lsname,
+            .pipeline         = "ingress",
+            .table_id         = switch_stage(IN, STATEFUL),
+            .priority         = 100,
+            .__match          = $"${rEGBIT_CONNTRACK_COMMIT()} == 1",
+            .actions          = "ct_commit(ct_label=0/1); next;",
+            .external_ids     = map_empty());
+        sb.Out_Logical_Flow(
+            .logical_datapath = lsname,
+            .pipeline         = "egress",
+            .table_id         = switch_stage(OUT, STATEFUL),
+            .priority         = 100,
+            .__match          = $"${rEGBIT_CONNTRACK_COMMIT()} == 1",
+            .actions          = "ct_commit(ct_label=0/1); next;",
+            .external_ids     = map_empty());
+
+        /* If REGBIT_CONNTRACK_NAT is set as 1, then packets should just be sent
+         * through nat (without committing).
+         *
+         * REGBIT_CONNTRACK_COMMIT is set for new connections and
+         * REGBIT_CONNTRACK_NAT is set for established connections. So they
+         * don't overlap.
+         */
+        sb.Out_Logical_Flow(
+            .logical_datapath = lsname,
+            .pipeline         = "ingress",
+            .table_id         = switch_stage(IN, STATEFUL),
+            .priority         = 100,
+            .__match          = $"${rEGBIT_CONNTRACK_NAT()} == 1",
+            .actions          = "ct_lb;",
+            .external_ids     = map_empty());
+        sb.Out_Logical_Flow(
+            .logical_datapath = lsname,
+            .pipeline         = "egress",
+            .table_id         = switch_stage(OUT, STATEFUL),
+            .priority         = 100,
+            .__match          = $"${rEGBIT_CONNTRACK_NAT()} == 1",
+            .actions          = "ct_lb;",
+            .external_ids     = map_empty());
+
+        /* Load balancing rules for new connections get committed to conntrack
+         * table.  So even if REGBIT_CONNTRACK_COMMIT is set in a previous table
+         * a higher priority rule for load balancing below also commits the
+         * connection, so it is okay if we do not hit the above match on
+         * REGBIT_CONNTRACK_COMMIT. */
+        for (LogicalSwitchLB(ls._uuid, lb_id)) {
+            for (lb in nb.Load_Balancer(._uuid = lb_id)) {
+                for (LBVIP(lb_id, (vip_key, vip_val))) {
+                    Some{(var ip_address, var port, var addr_family)} = ip_address_and_port_from_lb_key(vip_key) in
+
+                    /* New connections in Ingress table. */
+                    var __match =if (addr_family == aF_INET()) {
+                            $"ct.new && ip4.dst == ${ip_address}"
+                        } else {
+                            $"ct.new && ip6.dst == ${ip_address}"
+                        } in
+                    if (port != 0) {
+                        var __match2 = __match ++
+                            if (set_nth(lb.protocol, 0) == Some{"udp"}) {
+                                $" && udp.dst == ${port}"
+                            } else {
+                                $" && tcp.dst == ${port}"
+                            } in
+                        sb.Out_Logical_Flow(
+                            .logical_datapath = lsname,
+                            .pipeline         = "ingress",
+                            .table_id         = switch_stage(IN, STATEFUL),
+                            .priority         = 120,
+                            .__match          = __match2,
+                            .actions          = $"ct_lb(${vip_val});",
+                            .external_ids     = map_empty())
+                    } else {
+                        sb.Out_Logical_Flow(
+                            .logical_datapath = lsname,
+                            .pipeline         = "ingress",
+                            .table_id         = switch_stage(IN, STATEFUL),
+                            .priority         = 110,
+                            .__match          = __match,
+                            .actions          = $"ct_lb(${vip_val});",
+                            .external_ids     = map_empty())
+                    }
+                }
+            }
+        }
+    }
+}
+
 
 /* Logical switch ingress table 0: ingress port security - L2 (priority 50)
                   ingress table 1: ingress port security - IP (priority 90 and 80)
