@@ -997,21 +997,34 @@ PortInGroup(port, group) :-
     nb.Port_Group(._uuid = group, .ports = ports),
     var port = FlatMap(ports).
 
-/* Logical switches with stateful ACLs */
-relation LogicalSwitchHasStatefulACL(ls: uuid)
+/* All ACLs associated with logical switch */
+relation LogicalSwitchACL(ls: uuid, acl: uuid)
 
-LogicalSwitchHasStatefulACL(ls) :-
+LogicalSwitchACL(ls, acl) :-
     nb.Logical_Switch(._uuid = ls, .acls = acls),
-    var acl = FlatMap(acls),
-    nb.ACL(._uuid = acl, .action = "allow-related").
+    var acl = FlatMap(acls).
 
-LogicalSwitchHasStatefulACL(ls) :-
-    nb.Logical_Switch(._uuid = ls, .acls = acls, .ports = ports),
+LogicalSwitchACL(ls, acl) :-
+    nb.Logical_Switch(._uuid = ls, .ports = ports),
     var port_id = FlatMap(ports),
     PortInGroup(port_id, group_id),
     nb.Port_Group(._uuid = group_id, .acls = acls),
-    var acl = FlatMap(acls),
+    var acl = FlatMap(acls).
+
+relation LogicalSwitchStatefulACL(ls: uuid, acl: uuid)
+
+LogicalSwitchStatefulACL(ls, acl) :-
+    LogicalSwitchACL(ls, acl),
     nb.ACL(._uuid = acl, .action = "allow-related").
+
+relation LogicalSwitchHasStatefulACL(ls: uuid, has_stateful_acl: bool)
+
+LogicalSwitchHasStatefulACL(ls, true) :-
+    LogicalSwitchStatefulACL(ls, _).
+
+LogicalSwitchHasStatefulACL(ls, false) :-
+    nb.Logical_Switch(._uuid = ls),
+    not LogicalSwitchStatefulACL(ls, _).
 
 /* Logical switch ports of type router */
 relation LogicalSwitchRouterPort(ls: uuid, lrp: uuid)
@@ -1054,7 +1067,7 @@ for (ls in nb.Logical_Switch) {
         /* If there are any stateful ACL rules in this datapath, we must
          * send all IP packets through the conntrack action, which handles
          * defragmentation, in order to match L4 headers. */
-        for (LogicalSwitchHasStatefulACL(ls._uuid)) {
+        for (LogicalSwitchHasStatefulACL(ls._uuid, true)) {
             for (LogicalSwitchRouterPort(ls._uuid, lsp_uuid)) {
                 for (nb.Logical_Switch_Port(._uuid = lsp_uuid, .name = lsp_name)) {
                     /* Can't use ct() for router ports. Consider the
@@ -1173,7 +1186,7 @@ relation LogicalSwitchHasLBVIP(ls: uuid)
 LogicalSwitchHasLBVIP(ls) :-
     LogicalSwitchLBVIP(ls, _).
 
-/* pre-LB */
+/* Pre-LB */
 for (ls in nb.Logical_Switch) {
     var lsname = uuid2str(ls._uuid) in {
         /* Do not send ND packets to conntrack */
@@ -1248,7 +1261,7 @@ for (ls in nb.Logical_Switch) {
     }
 }
 
-/* pre-stateful */
+/* Pre-stateful */
 for (ls in nb.Logical_Switch) {
     var lsname = uuid2str(ls._uuid) in {
         /* Ingress and Egress pre-stateful Table (Priority 0): Packets are
@@ -1291,6 +1304,488 @@ for (ls in nb.Logical_Switch) {
     }
 }
 
+function build_acl_log(acl: nb.ACL): string =
+{
+    if (not acl.log) {
+        ""
+    } else {
+        var strs: Vec<string> = vec_empty();
+        match (set_nth(acl.name, 0)) {
+            None -> (),
+            Some{name} -> vec_push(strs, $"name=\"${name}\"")
+        };
+        /* If a severity level isn't specified, default to "info". */
+        match (set_nth(acl.severity, 0)) {
+            None -> vec_push(strs, "severity=info"),
+            Some{severity} -> vec_push(strs, $"severity=${severity}")
+        };
+        match (acl.action) {
+            "drop" -> {
+                vec_push(strs, "verdict=drop")
+            },
+            "reject" -> {
+                vec_push(strs, "verdict=reject")
+            },
+            "allow" -> {
+                vec_push(strs, "verdict=allow")
+            },
+            "allow-related" -> {
+                vec_push(strs, "verdict=allow")
+            },
+            _ -> ()
+        };
+        match (set_nth(acl.meter, 0)) {
+            None -> (),
+            Some{meter} -> vec_push(strs, $"meter=${meter}")
+        };
+        $"log(${string_join(strs, \", \")}); "
+    }
+}
+
+/* Due to various hard-coded priorities need to implement ACLs, the
+ * northbound database supports a smaller range of ACL priorities than
+ * are available to logical flows.  This value is added to an ACL
+ * priority to determine the ACL's logical flow priority. */
+function oVN_ACL_PRI_OFFSET(): integer = 1000
+
+/* Intermediate relation that stores reject ACLs.
+ * The following rules generate logical flows for these ACLs.
+ */
+relation Reject(lsname: string, pipeline: string, stage: integer, acl: nb.ACL, extra_match: string, extra_actions: string)
+
+/* build_reject_acl_rules() */
+for (Reject(lsname, pipeline, stage, acl, extra_match, extra_actions)) {
+    var ingress = (pipeline == "ingress") in {
+        /* TCP */
+        var __match = if (extra_match != "") {
+                $"(${extra_match}) && "
+            } else {
+                ""
+            } ++ $"ip4 && tcp && (${acl.__match})" in
+        var actions = $"${build_acl_log(acl)}reg0 = 0; " ++
+                      "eth.dst <-> eth.src; ip4.dst <-> ip4.src; " ++
+                      $"tcp_reset { outport <-> inport; ${if ingress \"output;\" else \"next(pipeline=ingress,table=0);\"} };" in
+        sb.Out_Logical_Flow(
+            .logical_datapath = lsname,
+            .pipeline         = pipeline,
+            .table_id         = stage,
+            .priority         = acl.priority + oVN_ACL_PRI_OFFSET() + 10,
+            .__match          = __match,
+            .actions          = actions,
+            .external_ids     = map_empty());
+
+        var __match = if (extra_match != "") {
+                $"(${extra_match}) && "
+            } else { "" } ++
+            $"ip6 && tcp && (${acl.__match})" in
+        var actions = $"${build_acl_log(acl)}reg0 = 0; "            ++
+                      "eth.dst <-> eth.src; ip6.dst <-> ip6.src; "  ++
+                      $"tcp_reset { outport <-> inport; ${if ingress \"output;\" else \"next(pipeline=ingress,table=0);\"} };" in
+        sb.Out_Logical_Flow(
+            .logical_datapath = lsname,
+            .pipeline         = pipeline,
+            .table_id         = stage,
+            .priority         = acl.priority + oVN_ACL_PRI_OFFSET() + 10,
+            .__match          = __match,
+            .actions          = actions,
+            .external_ids     = map_empty());
+
+        /* IP traffic */
+        var __match = if (extra_match != "") {
+                $"(${extra_match}) && "
+            } else { "" } ++
+            $"ip4 && (${acl.__match})" in
+        var actions = build_acl_log(acl) ++
+                      if (extra_actions != "") {
+                          $"${extra_actions} "
+                      } else { "" } ++
+                      "reg0 = 0; eth.dst <-> eth.src; ip4.dst <-> ip4.src; " ++
+                      $"icmp4 { outport <-> inport; ${if ingress \"output;\" else \"next(pipeline=ingress,table=0);\"} };" in
+        sb.Out_Logical_Flow(
+            .logical_datapath = lsname,
+            .pipeline         = pipeline,
+            .table_id         = stage,
+            .priority         = acl.priority + oVN_ACL_PRI_OFFSET(),
+            .__match          = __match,
+            .actions          = actions,
+            .external_ids     = map_empty());
+
+
+        var __match = if (extra_match != "") {
+                $"(${extra_match}) && "
+            } else { "" } ++
+            $"ip6 && (${acl.__match})" in
+        var actions = build_acl_log(acl) ++
+                      if (extra_actions != "") {
+                          $"${extra_actions} "
+                      } else { "" } ++
+                      "reg0 = 0; icmp6 { "  ++
+                      "eth.dst <-> eth.src; ip6.dst <-> ip6.src; " ++
+                      $"outport <-> inport; ${if ingress \"output;\" else \"next(pipeline=ingress,table=0);\"} };" in
+        sb.Out_Logical_Flow(
+            .logical_datapath = lsname,
+            .pipeline         = pipeline,
+            .table_id         = stage,
+            .priority         = acl.priority + oVN_ACL_PRI_OFFSET(),
+            .__match          = __match,
+            .actions          = actions,
+            .external_ids     = map_empty())
+    }
+}
+
+/* build_acls */
+for (ls in nb.Logical_Switch) {
+    var lsname = uuid2str(ls._uuid) in
+    for (LogicalSwitchHasStatefulACL(ls._uuid, has_stateful)) {
+        /* Ingress and Egress ACL Table (Priority 0): Packets are allowed by
+         * default.  A related rule at priority 1 is added below if there
+         * are any stateful ACLs in this datapath. */
+        sb.Out_Logical_Flow(
+            .logical_datapath = lsname,
+            .pipeline         = "ingress",
+            .table_id         = switch_stage(IN, ACL),
+            .priority         = 0,
+            .__match          = "1",
+            .actions          = "next;",
+            .external_ids     = map_empty());
+        sb.Out_Logical_Flow(
+            .logical_datapath = lsname,
+            .pipeline         = "egress",
+            .table_id         = switch_stage(OUT, ACL),
+            .priority         = 0,
+            .__match          = "1",
+            .actions          = "next;",
+            .external_ids     = map_empty());
+
+        if (has_stateful) {
+            /* Ingress and Egress ACL Table (Priority 1).
+             *
+             * By default, traffic is allowed.  This is partially handled by
+             * the Priority 0 ACL flows added earlier, but we also need to
+             * commit IP flows.  This is because, while the initiater's
+             * direction may not have any stateful rules, the server's may
+             * and then its return traffic would not have an associated
+             * conntrack entry and would return "+invalid".
+             *
+             * We use "ct_commit" for a connection that is not already known
+             * by the connection tracker.  Once a connection is committed,
+             * subsequent packets will hit the flow at priority 0 that just
+             * uses "next;"
+             *
+             * We also check for established connections that have ct_label.blocked
+             * set on them.  That's a connection that was disallowed, but is
+             * now allowed by policy again since it hit this default-allow flow.
+             * We need to set ct_label.blocked=0 to let the connection continue,
+             * which will be done by ct_commit() in the "stateful" stage.
+             * Subsequent packets will hit the flow at priority 0 that just
+             * uses "next;". */
+            sb.Out_Logical_Flow(
+                .logical_datapath = lsname,
+                .pipeline         = "ingress",
+                .table_id         = switch_stage(IN, ACL),
+                .priority         = 1,
+                .__match          = "ip && (!ct.est || (ct.est && ct_label.blocked == 1))",
+                .actions          = $"${rEGBIT_CONNTRACK_COMMIT()} = 1; next;",
+                .external_ids     = map_empty());
+            sb.Out_Logical_Flow(
+                .logical_datapath = lsname,
+                .pipeline         = "egress",
+                .table_id         = switch_stage(OUT, ACL),
+                .priority         = 1,
+                .__match          = "ip && (!ct.est || (ct.est && ct_label.blocked == 1))",
+                .actions          = $"${rEGBIT_CONNTRACK_COMMIT()} = 1; next;",
+                .external_ids     = map_empty());
+
+            /* Ingress and Egress ACL Table (Priority 65535).
+             *
+             * Always drop traffic that's in an invalid state.  Also drop
+             * reply direction packets for connections that have been marked
+             * for deletion (bit 0 of ct_label is set).
+             *
+             * This is enforced at a higher priority than ACLs can be defined. */
+            sb.Out_Logical_Flow(
+                .logical_datapath = lsname,
+                .pipeline         = "ingress",
+                .table_id         = switch_stage(IN, ACL),
+                .priority         = 65535,
+                .__match          = "ct.inv || (ct.est && ct.rpl && ct_label.blocked == 1)",
+                .actions          = "drop;",
+                .external_ids     = map_empty());
+            sb.Out_Logical_Flow(
+                .logical_datapath = lsname,
+                .pipeline         = "egress",
+                .table_id         = switch_stage(OUT, ACL),
+                .priority         = 65535,
+                .__match          = "ct.inv || (ct.est && ct.rpl && ct_label.blocked == 1)",
+                .actions          = "drop;",
+                .external_ids     = map_empty());
+
+            /* Ingress and Egress ACL Table (Priority 65535).
+             *
+             * Allow reply traffic that is part of an established
+             * conntrack entry that has not been marked for deletion
+             * (bit 0 of ct_label).  We only match traffic in the
+             * reply direction because we want traffic in the request
+             * direction to hit the currently defined policy from ACLs.
+             *
+             * This is enforced at a higher priority than ACLs can be defined. */
+            sb.Out_Logical_Flow(
+                .logical_datapath = lsname,
+                .pipeline         = "ingress",
+                .table_id         = switch_stage(IN, ACL),
+                .priority         = 65535,
+                .__match          = "ct.est && !ct.rel && !ct.new && !ct.inv " ++
+                                    "&& ct.rpl && ct_label.blocked == 0",
+                .actions          = "next;",
+                .external_ids     = map_empty());
+            sb.Out_Logical_Flow(
+                .logical_datapath = lsname,
+                .pipeline         = "egress",
+                .table_id         = switch_stage(OUT, ACL),
+                .priority         = 65535,
+                .__match          = "ct.est && !ct.rel && !ct.new && !ct.inv " ++
+                                    "&& ct.rpl && ct_label.blocked == 0",
+                .actions          = "next;",
+                .external_ids     = map_empty());
+
+            /* Ingress and Egress ACL Table (Priority 65535).
+             *
+             * Allow traffic that is related to an existing conntrack entry that
+             * has not been marked for deletion (bit 0 of ct_label).
+             *
+             * This is enforced at a higher priority than ACLs can be defined.
+             *
+             * NOTE: This does not support related data sessions (eg,
+             * a dynamically negotiated FTP data channel), but will allow
+             * related traffic such as an ICMP Port Unreachable through
+             * that's generated from a non-listening UDP port.  */
+            sb.Out_Logical_Flow(
+                .logical_datapath = lsname,
+                .pipeline         = "ingress",
+                .table_id         = switch_stage(IN, ACL),
+                .priority         = 65535,
+                .__match          = "!ct.est && ct.rel && !ct.new && !ct.inv " ++
+                                    "&& ct_label.blocked == 0",
+                .actions          = "next;",
+                .external_ids     = map_empty());
+            sb.Out_Logical_Flow(
+                .logical_datapath = lsname,
+                .pipeline         = "egress",
+                .table_id         = switch_stage(OUT, ACL),
+                .priority         = 65535,
+                .__match          = "!ct.est && ct.rel && !ct.new && !ct.inv " ++
+                                    "&& ct_label.blocked == 0",
+                .actions          = "next;",
+                .external_ids     = map_empty());
+
+            /* Ingress and Egress ACL Table (Priority 65535).
+             *
+             * Not to do conntrack on ND packets. */
+            sb.Out_Logical_Flow(
+                .logical_datapath = lsname,
+                .pipeline         = "ingress",
+                .table_id         = switch_stage(IN, ACL),
+                .priority         = 65535,
+                .__match          = "nd",
+                .actions          = "next;",
+                .external_ids     = map_empty());
+            sb.Out_Logical_Flow(
+                .logical_datapath = lsname,
+                .pipeline         = "egress",
+                .table_id         = switch_stage(OUT, ACL),
+                .priority         = 65535,
+                .__match          = "nd",
+                .actions          = "next;",
+                .external_ids     = map_empty())
+        };
+
+        /* Ingress or Egress ACL Table (Various priorities). */
+        for (LogicalSwitchACL(.ls = ls._uuid, .acl = acl_uuid)) {
+            /* consider_acl */
+            for (acl in nb.ACL(._uuid = acl_uuid)) {
+                var ingress = acl.direction == "from-lport" in
+                var stage = if ingress switch_stage(IN, ACL) else switch_stage(OUT, ACL) in
+                var pipeline = if ingress "ingress" else "egress" in
+                var stage_hint = map_singleton("stage-hint", $"${hex(acl_uuid[127:96])}") in
+                if (acl.action == "allow" or acl.action == "allow-related") {
+                    /* If there are any stateful flows, we must even commit "allow"
+                     * actions.  This is because, while the initiater's
+                     * direction may not have any stateful rules, the server's
+                     * may and then its return traffic would not have an
+                     * associated conntrack entry and would return "+invalid". */
+                    if (not has_stateful) {
+                        sb.Out_Logical_Flow(
+                            .logical_datapath = lsname,
+                            .pipeline         = pipeline,
+                            .table_id         = stage,
+                            .priority         = acl.priority + oVN_ACL_PRI_OFFSET(),
+                            .__match          = acl.__match,
+                            .actions          = $"${build_acl_log(acl)}next;",
+                            .external_ids     = stage_hint)
+                    } else {
+                        /* Commit the connection tracking entry if it's a new
+                         * connection that matches this ACL.  After this commit,
+                         * the reply traffic is allowed by a flow we create at
+                         * priority 65535, defined earlier.
+                         *
+                         * It's also possible that a known connection was marked for
+                         * deletion after a policy was deleted, but the policy was
+                         * re-added while that connection is still known.  We catch
+                         * that case here and un-set ct_label.blocked (which will be done
+                         * by ct_commit in the "stateful" stage) to indicate that the
+                         * connection should be allowed to resume.
+                         */
+                        sb.Out_Logical_Flow(
+                            .logical_datapath = lsname,
+                            .pipeline         = pipeline,
+                            .table_id         = stage,
+                            .priority         = acl.priority + oVN_ACL_PRI_OFFSET(),
+                            .__match          = $"((ct.new && !ct.est) || (!ct.new && ct.est && !ct.rpl " ++
+                                                $"&& ct_label.blocked == 1)) && (${acl.__match})",
+                            .actions          = $"${rEGBIT_CONNTRACK_COMMIT()} = 1; ${build_acl_log(acl)}next;",
+                            .external_ids     = stage_hint);
+
+                        /* Match on traffic in the request direction for an established
+                         * connection tracking entry that has not been marked for
+                         * deletion.  There is no need to commit here, so we can just
+                         * proceed to the next table. We use this to ensure that this
+                         * connection is still allowed by the currently defined
+                         * policy. */
+                        sb.Out_Logical_Flow(
+                            .logical_datapath = lsname,
+                            .pipeline         = pipeline,
+                            .table_id         = stage,
+                            .priority         = acl.priority + oVN_ACL_PRI_OFFSET(),
+                            .__match          = $"!ct.new && ct.est && !ct.rpl" ++
+                                                $" && ct_label.blocked == 0 && (${acl.__match})",
+                            .actions          = $"${build_acl_log(acl)}next;",
+                            .external_ids     = stage_hint)
+                    }
+                } else if (acl.action == "drop" or acl.action == "reject") {
+                    /* The implementation of "drop" differs if stateful ACLs are in
+                     * use for this datapath.  In that case, the actions differ
+                     * depending on whether the connection was previously committed
+                     * to the connection tracker with ct_commit. */
+                    if (has_stateful) {
+                        /* If the packet is not part of an established connection, then
+                         * we can simply reject/drop it. */
+                        var __match = "(!ct.est || (ct.est && ct_label.blocked == 1))" in
+                        if (acl.action == "reject") {
+                            Reject(lsname, pipeline, stage, acl, __match, "")
+                        } else {
+                            sb.Out_Logical_Flow(
+                                .logical_datapath = lsname,
+                                .pipeline         = pipeline,
+                                .table_id         = stage,
+                                .priority         = acl.priority + oVN_ACL_PRI_OFFSET(),
+                                .__match          = __match ++ $" && (${acl.__match})",
+                                .actions          = $"${build_acl_log(acl)}/* drop */",
+                                .external_ids     = stage_hint)
+                        };
+                        /* For an existing connection without ct_label set, we've
+                         * encountered a policy change. ACLs previously allowed
+                         * this connection and we committed the connection tracking
+                         * entry.  Current policy says that we should drop this
+                         * connection.  First, we set bit 0 of ct_label to indicate
+                         * that this connection is set for deletion.  By not
+                         * specifying "next;", we implicitly drop the packet after
+                         * updating conntrack state.  We would normally defer
+                         * ct_commit() to the "stateful" stage, but since we're
+                         * rejecting/dropping the packet, we go ahead and do it here.
+                         */
+                        var __match = "ct.est && ct_label.blocked == 0" in
+                        var actions = "ct_commit(ct_label=1/1); " in
+                        if (acl.action == "reject") {
+                            Reject(lsname, pipeline, stage, acl, __match, actions)
+                        } else {
+                            sb.Out_Logical_Flow(
+                                .logical_datapath = lsname,
+                                .pipeline         = pipeline,
+                                .table_id         = stage,
+                                .priority         = acl.priority + oVN_ACL_PRI_OFFSET(),
+                                .__match          = __match ++ $" && (${acl.__match})",
+                                .actions          = $"${build_acl_log(acl)}/* drop */",
+                                .external_ids     = stage_hint)
+                        }
+                    } else {
+                        /* There are no stateful ACLs in use on this datapath,
+                         * so a "reject/drop" ACL is simply the "reject/drop"
+                         * logical flow action in all cases. */
+                        if (acl.action == "reject") {
+                            Reject(lsname, pipeline, stage, acl, "", "")
+                        } else {
+                            sb.Out_Logical_Flow(
+                                .logical_datapath = lsname,
+                                .pipeline         = pipeline,
+                                .table_id         = stage,
+                                .priority         = acl.priority + oVN_ACL_PRI_OFFSET(),
+                                .__match          = acl.__match,
+                                .actions          = $"${build_acl_log(acl)}/* drop */",
+                                .external_ids     = stage_hint)
+                        }
+                    }
+                }
+            }
+        };
+
+        /* Add 34000 priority flow to allow DHCP reply from ovn-controller to all
+         * logical ports of the datapath if the CMS has configured DHCPv4 options.
+         * */
+        for (LogicalPortSwitch(.lport = port_id, .lswitch = ls._uuid)) {
+            for (nb.Logical_Switch_Port(._uuid = port_id, .name = port_name,
+                                        .dhcpv4_options = dhcpv4_options, .dhcpv6_options = dhcpv6_options))
+            {
+                Some{var dhcpv4_options_uuid} = set_nth(dhcpv4_options, 0) in
+                for (nb.DHCP_Options(._uuid = dhcpv4_options_uuid, .options = options)) {
+                    (Some{var server_id}, Some{var server_mac}, Some{var lease_time}) =
+                        (map_get(options, "server_id"), map_get(options, "server_mac"), map_get(options, "lease_time")) in
+                    sb.Out_Logical_Flow(
+                        .logical_datapath = lsname,
+                        .pipeline         = "egress",
+                        .table_id         = switch_stage(OUT, ACL),
+                        .priority         = 34000,
+                        .__match          = $"outport == \"${port_name}\" && eth.src == ${server_mac} " ++
+                                            "&& ip4.src == ${server_id} && udp && udp.src == 67 "       ++
+                                            "&& udp.dst == 68",
+                        .actions          = if (has_stateful) "ct_commit; next;" else "next;",
+                        .external_ids     = map_empty())
+                };
+                Some{var dhcpv6_options_uuid} = set_nth(dhcpv6_options, 0) in
+                for (nb.DHCP_Options(._uuid = dhcpv6_options_uuid, .options = options)) {
+                    Some{var server_mac} = map_get(options, "server_id") in
+                    Some{var ea} = eth_addr_from_string(server_mac) in
+                    var server_ip = ipv6_string_mapped(in6_generate_lla(ea)) in
+                    /* Get the link local IP of the DHCPv6 server from the
+                     * server MAC. */
+                    sb.Out_Logical_Flow(
+                        .logical_datapath = lsname,
+                        .pipeline         = "egress",
+                        .table_id         = switch_stage(OUT, ACL),
+                        .priority         = 34000,
+                        .__match          = $"outport == \"${port_name}\" && eth.src == ${server_mac} " ++
+                                            $"&& ip6.src == ${server_ip} && udp && udp.src == 547 "     ++
+                                            "&& udp.dst == 546",
+                        .actions          = if has_stateful "ct_commit; next;" else "next;",
+                        .external_ids     = map_empty())
+                }
+            }
+        };
+
+        /* Add a 34000 priority flow to advance the DNS reply from ovn-controller,
+         * if the CMS has configured DNS records for the datapath.
+         */
+        for (LSHasDNSRecords(ls._uuid)) {
+            sb.Out_Logical_Flow(
+                .logical_datapath = lsname,
+                .pipeline         = "egress",
+                .table_id         = switch_stage(OUT, ACL),
+                .priority         = 34000,
+                .__match          = "udp.src == 53",
+                .actions          = if has_stateful "ct_commit; next;" else "next;",
+                .external_ids     = map_empty())
+        }
+    }
+}
 
 /* Logical switch ingress table 0: ingress port security - L2 (priority 50)
                   ingress table 1: ingress port security - IP (priority 90 and 80)
