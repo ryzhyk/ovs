@@ -949,6 +949,16 @@ LSPortIPv6Address(lsport, ea_s, addr) :-
     LSPortAddresses(lsport, LPortAddress{.ea_s = ea_s, .ipv6_addrs = addrs}),
     var addr = FlatMap(addrs).
 
+
+/* FIXME: what happens when extract_lrp_networks fails. We currently add the port anyway,
+ * but do not create an LRPortNetworks entry for it. */
+relation LRPortNetworks(lrport: uuid,
+                        networks:  lport_addresses)
+
+LRPortNetworks(lrport, addrs) :-
+    nb.Logical_Router_Port(._uuid = lrport, .mac = mac, .networks = networks),
+    Some{var addrs} = extract_lrp_networks(mac, networks).
+
 function build_port_security_ipv6_flow(
     pipeline: Direction,
     ea: eth_addr,
@@ -3022,6 +3032,72 @@ for (lsp in nb.Logical_Switch_Port)
         }
     }
 }
+
+
+/* Logical router ingress table 0: Admission control framework. */
+for (lr in nb.Logical_Router) {
+    var lrname = uuid2str(lr._uuid) in {
+        /* Logical VLANs not supported.
+         * Broadcast/multicast source address is invalid. */
+        sb.Out_Logical_Flow(
+            .logical_datapath = lrname,
+            .pipeline         = "ingress",
+            .table_id         = switch_stage(IN, ADMISSION),
+            .priority         = 100,
+            .__match          = "vlan.present || eth.src[40]",
+            .actions          = "drop;",
+            .external_ids     = map_empty())
+    }
+}
+
+/* Logical router ingress table 0: match (priority 50). */
+for (lrp in nb.Logical_Router_Port
+    /* Drop packets from disabled logical ports (since logical flow
+     * tables are default-drop). */
+        if is_enabled(lrp.enabled))
+{
+    for (LogicalPortRouter(.lport = lrp._uuid, .lrouter = lr_uuid)) {
+        var lrname = uuid2str(lr_uuid) in
+        var json_key = json_string_escape(lrp.name) in {
+
+            //if (op->derived) {
+            //    /* No ingress packets should be received on a chassisredirect
+            //     * port. */
+            //    continue;
+            //}
+
+            sb.Out_Logical_Flow(
+                .logical_datapath = lrname,
+                .pipeline         = "ingress",
+                .table_id         = switch_stage(IN, ADMISSION),
+                .priority         = 50,
+                .__match          = $"eth.mcast && inport == ${json_key}",
+                .actions          = "next;",
+                .external_ids     = map_empty());
+
+            for (LRPortNetworks(lrp._uuid, lrp_networks)) {
+                for (RouterPortIsRedirect(lrp._uuid, is_redirect)) {
+                    var __match =
+                        $"eth.dst == ${lrp_networks.ea_s} && inport == ${json_key}" ++
+                        if is_redirect {
+                            /* Traffic with eth.dst = l3dgw_port->lrp_networks.ea_s
+                             * should only be received on the "redirect-chassis". */
+                            $" && is_chassis_resident(${json_string_escape(chassis_redirect_name(lrp.name))})"
+                        } else { "" } in
+                    sb.Out_Logical_Flow(
+                        .logical_datapath = lrname,
+                        .pipeline         = "ingress",
+                        .table_id         = switch_stage(IN, ADMISSION),
+                        .priority         = 50,
+                        .__match          = __match,
+                        .actions          = "next;",
+                        .external_ids     = map_empty())
+                }
+            }
+        }
+    }
+}
+
 
 /*
  * Datapath tunnel key allocation:
