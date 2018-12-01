@@ -2841,41 +2841,39 @@ for (lsp in nb.Logical_Switch_Port)
                 for(nb.Logical_Router_Port(.name = lrport_name, ._uuid = lrport_uuid, .mac = mac_str)) {
                         Some{var mac} = scan_eth_addr(mac_str) in {
                         for (LogicalPortRouter(lrport_uuid, lr_uuid)) {
-                            for (nb.Logical_Router(._uuid = lr_uuid, .options = lroptions)) {
-                                for (RouterPortIsRedirect(lrport_uuid, is_redirect)) {
-                                    var __match = if (is_redirect) {
-                                        /* The destination lookup flow for the router's
-                                         * distributed gateway port MAC address should only be
-                                         * programmed on the "redirect-chassis". */
-                                        $"eth.dst == ${mac} && is_chassis_resident(${json_string_escape(chassis_redirect_name(lrport_name))})"
-                                    } else {
-                                        $"eth.dst == ${mac}"
-                                    } in
-                                    sb.Out_Logical_Flow(.logical_datapath = lsname,
-                                                        .pipeline         = "ingress",
-                                                        .table_id         = switch_stage(IN, L2_LKUP),
-                                                        .priority         = 50,
-                                                        .__match          = __match,
-                                                        .actions          = $"outport = ${json_key}; output;",
-                                                        .external_ids     = map_empty());
+                            for (RouterPortIsRedirect(lrport_uuid, is_redirect)) {
+                                var __match = if (is_redirect) {
+                                    /* The destination lookup flow for the router's
+                                     * distributed gateway port MAC address should only be
+                                     * programmed on the "redirect-chassis". */
+                                    $"eth.dst == ${mac} && is_chassis_resident(${json_string_escape(chassis_redirect_name(lrport_name))})"
+                                } else {
+                                    $"eth.dst == ${mac}"
+                                } in
+                                sb.Out_Logical_Flow(.logical_datapath = lsname,
+                                                    .pipeline         = "ingress",
+                                                    .table_id         = switch_stage(IN, L2_LKUP),
+                                                    .priority         = 50,
+                                                    .__match          = __match,
+                                                    .actions          = $"outport = ${json_key}; output;",
+                                                    .external_ids     = map_empty());
 
-                                    /* Add ethernet addresses specified in NAT rules on
-                                     * distributed logical routers. */
-                                    if (is_redirect) {
-                                        for (LogicalRouterNAT(.lr = lr_uuid, .nat = nat)) {
-                                            if (nat.__type == "dnat_and_snat") {
-                                                Some{var lport} = set_nth(nat.logical_port, 0) in
-                                                Some{var emac} = set_nth(nat.external_mac, 0) in
-                                                Some{var nat_mac} = eth_addr_from_string(emac) in
-                                                var __match = $"eth.dst == ${nat_mac} && is_chassis_resident(\"${lport}\")" in
-                                                sb.Out_Logical_Flow(.logical_datapath = lsname,
-                                                                    .pipeline         = "ingress",
-                                                                    .table_id         = switch_stage(IN, L2_LKUP),
-                                                                    .priority         = 50,
-                                                                    .__match          = __match,
-                                                                    .actions          = $"outport = ${json_key}; output;",
-                                                                    .external_ids     = map_empty())
-                                            }
+                                /* Add ethernet addresses specified in NAT rules on
+                                 * distributed logical routers. */
+                                if (is_redirect) {
+                                    for (LogicalRouterNAT(.lr = lr_uuid, .nat = nat)) {
+                                        if (nat.__type == "dnat_and_snat") {
+                                            Some{var lport} = set_nth(nat.logical_port, 0) in
+                                            Some{var emac} = set_nth(nat.external_mac, 0) in
+                                            Some{var nat_mac} = eth_addr_from_string(emac) in
+                                            var __match = $"eth.dst == ${nat_mac} && is_chassis_resident(\"${lport}\")" in
+                                            sb.Out_Logical_Flow(.logical_datapath = lsname,
+                                                                .pipeline         = "ingress",
+                                                                .table_id         = switch_stage(IN, L2_LKUP),
+                                                                .priority         = 50,
+                                                                .__match          = __match,
+                                                                .actions          = $"outport = ${json_key}; output;",
+                                                                .external_ids     = map_empty())
                                         }
                                     }
                                 }
@@ -3024,7 +3022,6 @@ for (lsp in nb.Logical_Switch_Port)
         }
     }
 }
-
 
 /*
  * Datapath tunnel key allocation:
