@@ -97,7 +97,6 @@ enum ovn_datapath_type {
  * functions can't be used in enums or switch cases.) */
 #define OVN_STAGE_BUILD(DP_TYPE, PIPELINE, TABLE) \
     (((DP_TYPE) << 9) | ((PIPELINE) << 8) | (TABLE))
-
 /* A stage within an OVN logical switch or router.
  *
  * An "enum ovn_stage" indicates whether the stage is part of a logical switch

@@ -119,6 +119,26 @@ pub fn ovn_extract_lsp_addresses(address: &arcval::DDString) -> std_Option<ovn_l
     }
 }
 
+
+pub fn ovn_extract_lrp_networks(mac: &arcval::DDString, networks: &std_Set<arcval::DDString>) -> std_Option<ovn_lport_addresses>
+{
+    unsafe {
+        let mut laddrs: lport_addresses = Default::default();
+        let mut networks_cstrs = Vec::with_capacity(networks.x.len());
+        let mut networks_ptrs = Vec::with_capacity(networks.x.len());
+        for net in networks.x.iter() {
+            networks_cstrs.push(ddstring2cstr(net));
+            networks_ptrs.push(networks_cstrs.last().unwrap().as_ptr());
+        };
+        if do_extract_lrp_networks(ddstring2cstr(mac).as_ptr(), networks_ptrs.as_ptr() as *const *const raw::c_char,
+                                   networks_ptrs.len(), &mut laddrs as *mut lport_addresses) {
+            std_Option::std_Some{x: laddrs.into_ddlog()}
+        } else {
+            std_Option::std_None
+        }
+    }
+}
+
 pub fn ovn_ipv6_parse_masked(s: &arcval::DDString) -> std_Either<arcval::DDString, (ovn_in6_addr, ovn_in6_addr)>
 {
     unsafe {
@@ -400,6 +420,8 @@ impl lport_addresses {
 extern "C" {
     // ovn/lib/ovn-util.h
     fn extract_lsp_addresses(address: *const raw::c_char, laddrs: *mut lport_addresses) -> bool;
+    fn do_extract_lrp_networks(mac: *const raw::c_char, networks: *const *const raw::c_char,
+                               n_networks: libc::size_t, laddrs: *mut lport_addresses) -> bool;
     fn destroy_lport_addresses(addrs: *mut lport_addresses);
     fn is_dynamic_lsp_address(address: *const raw::c_char) -> bool;
     fn split_addresses(addresses: *const raw::c_char, ip4_addrs: *mut ovs_svec, ipv6_addrs: *mut ovs_svec);
