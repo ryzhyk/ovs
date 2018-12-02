@@ -62,6 +62,8 @@ bool extract_lsp_addresses(const char *address, struct lport_addresses *);
 bool extract_ip_addresses(const char *address, struct lport_addresses *);
 bool extract_lrp_networks(const struct nbrec_logical_router_port *,
                           struct lport_addresses *);
+bool do_extract_lrp_networks(char *mac, char **networks, size_t n_networks,
+			     struct lport_addresses *laddrs);
 void destroy_lport_addresses(struct lport_addresses *);
 
 void split_addresses(const char *addresses, struct svec *ipv4_addrs,
