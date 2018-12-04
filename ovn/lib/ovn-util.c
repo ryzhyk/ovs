@@ -215,14 +215,14 @@ extract_lrp_networks(const struct nbrec_logical_router_port *lrp,
                      struct lport_addresses *laddrs)
 {
     return do_extract_lrp_networks(lrp->mac, lrp->networks, lrp->n_networks,
-				   laddrs);
+                                   laddrs);
 }
 
 /* Separate out the body of 'extract_lrp_networks()' for use from DDlog,
  * which does not know the 'nbrec_logical_router_port' type. */
 bool
 do_extract_lrp_networks(char *mac, char **networks, size_t n_networks,
-			struct lport_addresses *laddrs)
+                        struct lport_addresses *laddrs)
 {
     memset(laddrs, 0, sizeof *laddrs);
 

@@ -63,7 +63,7 @@ bool extract_ip_addresses(const char *address, struct lport_addresses *);
 bool extract_lrp_networks(const struct nbrec_logical_router_port *,
                           struct lport_addresses *);
 bool do_extract_lrp_networks(char *mac, char **networks, size_t n_networks,
-			     struct lport_addresses *laddrs);
+                             struct lport_addresses *laddrs);
 void destroy_lport_addresses(struct lport_addresses *);
 
 void split_addresses(const char *addresses, struct svec *ipv4_addrs,
@@ -88,6 +88,6 @@ uint32_t ovn_logical_flow_hash(const struct uuid *logical_datapath,
                                const char *match, const char *actions);
 
 void ip_address_and_port_from_lb_key(const char *key, char **ip_address,
-				     uint16_t *port, int *addr_family);
+                                     uint16_t *port, int *addr_family);
 
 #endif
