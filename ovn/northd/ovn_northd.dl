@@ -2890,6 +2890,16 @@ LogicalRouterNAT(lr, nat) :-
     var nat_uuid = FlatMap(nats),
     nat in nb.NAT(._uuid = nat_uuid).
 
+relation LogicalRouterSNATExternalIPs(lr: uuid, external_ips: Set<string>)
+
+LogicalRouterSNATExternalIPs(lr, external_ips) :-
+    LogicalRouterNAT(lr, nb.NAT{.__type = "snat", .external_ip = external_ip}),
+    var external_ips = Aggregate((lr), group2set(external_ip)).
+
+LogicalRouterSNATExternalIPs(lr, set_empty()) :-
+    nb.Logical_Router(._uuid = lr),
+    not LogicalRouterNAT(lr, nb.NAT{.__type = "snat"}).
+
 /* Ingress table 16: Destination lookup, unicast handling (priority 50), */
 for (lsp in nb.Logical_Switch_Port)
 {
@@ -3299,6 +3309,30 @@ AddChassisResidentCheck(lrp, false) :-
     nb.Logical_Router_Port(._uuid = lrp),
     not AddChassisResidentCheck_(lrp, _).
 
+
+function get_force_snat_ip(lr: nb.Logical_Router, key_type: string): Option<(string, ovs_be32)> =
+{
+    match (map_get(lr.options, key_type ++ "_force_snat_ip")) {
+        None -> None,
+        Some{ip_address} -> {
+            match (ip_parse_masked(ip_address)) {
+                Left{err} -> {
+                    warn($"bad ip ${ip_address} in options of router ${uuid2str(lr._uuid)}");
+                    None
+                },
+                Right{(ip, mask)} -> {
+                    if (mask != 32'hffffffff) {
+                        warn($"bad ip ${ip_address} in options of router ${uuid2str(lr._uuid)}");
+                        None
+                    } else {
+                        Some{(ip_address, ip)}
+                    }
+                }
+            }
+        }
+    }
+}
+
 /* Logical router ingress table 1: IP Input for IPv4. */
 for (LogicalRouterPortAttrs(.lrp = lrp, .json_key = json_key,
                             .lr_uuid = lr_uuid, .lr_name = lr_name,
@@ -3451,191 +3485,176 @@ for (LogicalRouterPortAttrs(.lrp = lrp, .json_key = json_key,
                 .__match          = __match,
                 .actions          = actions,
                 .external_ids     = map_empty())
+    };
+
+    for (LogicalRouterNAT(lr_uuid, nat) if nat.__type != "snat") {
+        Some{var ip} = match (ip_parse(nat.external_ip)) {
+            Some{ip} -> { Some{ip} },
+            None -> {
+                warn($"bad ip address ${nat.external_ip} in nat configuration " ++
+                     $"for router ${uuid2str(lr_uuid)}");
+                None: Option<ovs_be32>
+            }
+        } in
+        /* ARP handling for external IP addresses.
+         *
+         * DNAT IP addresses are external IP addresses that need ARP
+         * handling. */
+        var __match = $"inport == ${json_key} && arp.tpa == ${ip_fmt(ip)} && arp.op == 1" in
+        var actions = "eth.dst = eth.src; "             ++
+                      "arp.op = 2; /* ARP reply */ "    ++
+                      "arp.tha = arp.sha; " in
+        (var __match2, var actions2) = if is_redirect {
+            match ((set_nth(nat.external_mac, 0), set_nth(nat.logical_port, 0))) {
+                (Some{external_mac}, Some{logical_port}) -> {
+                    match (eth_addr_from_string(external_mac)) {
+                        Some{mac} -> {
+                            /* distributed NAT case, use nat->external_mac */
+                            /* Traffic with eth.src = nat->external_mac should only be
+                             * sent from the chassis where nat->logical_port is
+                             * resident, so that upstream MAC learning points to the
+                             * correct chassis.  Also need to avoid generation of
+                             * multiple ARP responses from different chassis. */
+                            ( __match ++ $" && is_chassis_resident(\"${logical_port}\")"
+                            , actions ++ $"eth.src = ${mac}; arp.sha = ${mac}; ")
+                        },
+                        None -> {
+                            ( __match ++ $" && is_chassis_resident(${json_string_escape(chassis_redirect_name(lrp.name))})"
+                            , actions ++ $"eth.src = ${lrp_networks.ea_s}; arp.sha = ${lrp_networks.ea_s}; ")
+                        }
+                    }
+                },
+                _ -> {
+                    /* Traffic with eth.src = l3dgw_port->lrp_networks.ea_s
+                     * should only be sent from the "redirect-chassis", so that
+                     * upstream MAC learning points to the "redirect-chassis".
+                     * Also need to avoid generation of multiple ARP responses
+                     * from different chassis. */
+                    ( __match ++ $" && is_chassis_resident(${json_string_escape(chassis_redirect_name(lrp.name))})"
+                    , actions ++ $"eth.src = ${lrp_networks.ea_s}; arp.sha = ${lrp_networks.ea_s}; ")
+                }
+            }
+        } else {
+            ( __match
+            , actions ++ $"eth.src = ${lrp_networks.ea_s}; arp.sha = ${lrp_networks.ea_s}; ")
+        } in
+        sb.Out_Logical_Flow(
+                .logical_datapath = lr_name,
+                .pipeline         = "ingress",
+                .table_id         = router_stage(IN, IP_INPUT),
+                .priority         = 90,
+                .__match          = __match2,
+                .actions          = actions2                    ++
+                                    "arp.tpa = arp.spa; "       ++
+                                    $"arp.spa = ${ip_fmt(ip)}; "++
+                                    $"outport = ${json_key}; "  ++
+                                    "flags.loopback = 1; "      ++
+                                    "output;",
+                .external_ids     = map_empty())
+    };
+
+    for (LogicalRouterHasRedirectPort(lr_uuid, true)) {
+        for (nb.Logical_Router(._uuid = lr_uuid, .options = lr_options)
+             if is_none(map_get(lr_options, "chassis")))
+        {
+            /* UDP/TCP port unreachable. */
+            for (LRPortNetworksIPv4Addr(lrp._uuid, addr)) {
+                var __match = $"ip4 && ip4.dst == ${addr.addr_s} && !ip.later_frag && udp" in
+                sb.Out_Logical_Flow(
+                        .logical_datapath = lr_name,
+                        .pipeline         = "ingress",
+                        .table_id         = router_stage(IN, IP_INPUT),
+                        .priority         = 80,
+                        .__match          = __match,
+                        .actions          = "icmp4 {"                  ++
+                                            "eth.dst <-> eth.src; "    ++
+                                            "ip4.dst <-> ip4.src; "    ++
+                                            "ip.ttl = 255; "           ++
+                                            "icmp4.type = 3; "         ++
+                                            "icmp4.code = 3; "         ++
+                                            "next; };",
+                        .external_ids     = map_empty());
+
+                var __match = $"ip4 && ip4.dst == ${addr.addr_s} && !ip.later_frag && tcp" in
+                sb.Out_Logical_Flow(
+                        .logical_datapath = lr_name,
+                        .pipeline         = "ingress",
+                        .table_id         = router_stage(IN, IP_INPUT),
+                        .priority         = 80,
+                        .__match          = __match,
+                        .actions          = "tcp_reset {"           ++
+                                            "eth.dst <-> eth.src; " ++
+                                            "ip4.dst <-> ip4.src; " ++
+                                            "next; };",
+                        .external_ids     = map_empty());
+
+                var __match = $"ip4 && ip4.dst == ${addr.addr_s} && !ip.later_frag" in
+                sb.Out_Logical_Flow(
+                        .logical_datapath = lr_name,
+                        .pipeline         = "ingress",
+                        .table_id         = router_stage(IN, IP_INPUT),
+                        .priority         = 70,
+                        .__match          = __match,
+                        .actions          = "icmp4 {"               ++
+                                            "eth.dst <-> eth.src; " ++
+                                            "ip4.dst <-> ip4.src; " ++
+                                            "ip.ttl = 255; "        ++
+                                            "icmp4.type = 3; "      ++
+                                            "icmp4.code = 2; "      ++
+                                            "next; };",
+                        .external_ids     = map_empty())
+            }
+        }
+    };
+
+    /* A gateway router can have 2 SNAT IP addresses to force DNATed and
+     * LBed traffic respectively to be SNATed.  In addition, there can be
+     * a number of SNAT rules in the NAT table. */
+    for (lr in nb.Logical_Router(._uuid = lr_uuid)) {
+        for (LogicalRouterSNATExternalIPs(lr_uuid, external_ips)) {
+            var snat_ips: Set<ovs_be32> = {
+                var snat_ips: Set<ovs_be32> = set_empty();
+                for (ip in external_ips) {
+                    match (ip_parse(ip)) {
+                        Some{snat_ip} -> set_insert(snat_ips, snat_ip),
+                        None -> warn($"bad ip address ${ip} in nat configuration " ++
+                                     $"for router ${uuid2str(lr_uuid)}")
+
+                    }
+                };
+                match (get_force_snat_ip(lr, "dnat")) {
+                    Some{(_, snat_ip)} -> set_insert(snat_ips, snat_ip),
+                    None -> ()
+                };
+                match (get_force_snat_ip(lr, "lb")) {
+                    Some{(_, snat_ip)} -> set_insert(snat_ips, snat_ip),
+                    None -> ()
+                };
+                snat_ips
+            } in
+            var ips = {
+                var ips: Vec<string> = vec_empty();
+                for (ip in lrp_networks.ipv4_addrs) {
+                    if (not set_contains(snat_ips, ip.addr)) {
+                        vec_push(ips, ip.addr_s)
+                    } else ()
+                };
+                ips
+            } in
+            var __match = "ip4.dst == {" ++ string_join(ips, ", ") ++ "}" in
+            if (not vec_is_empty(ips)) {
+                sb.Out_Logical_Flow(
+                        .logical_datapath = lr_name,
+                        .pipeline         = "ingress",
+                        .table_id         = router_stage(IN, IP_INPUT),
+                        .priority         = 60,
+                        .__match          = __match,
+                        .actions          = "drop;",
+                        .external_ids     = map_empty())
+            }
+        }
     }
 }
-
-//    /* A gateway router can have 2 SNAT IP addresses to force DNATed and
-//     * LBed traffic respectively to be SNATed.  In addition, there can be
-//     * a number of SNAT rules in the NAT table. */
-//    ovs_be32 *snat_ips = xmalloc(sizeof *snat_ips *
-//                                 (op->od->nbr->n_nat + 2));
-//    size_t n_snat_ips = 0;
-//
-//    ovs_be32 snat_ip;
-//    const char *dnat_force_snat_ip = get_force_snat_ip(op->od, "dnat",
-//                                                       &snat_ip);
-//    if (dnat_force_snat_ip) {
-//        snat_ips[n_snat_ips++] = snat_ip;
-//    }
-//
-//    const char *lb_force_snat_ip = get_force_snat_ip(op->od, "lb",
-//                                                     &snat_ip);
-//    if (lb_force_snat_ip) {
-//        snat_ips[n_snat_ips++] = snat_ip;
-//    }
-//
-//    for (int i = 0; i < op->od->nbr->n_nat; i++) {
-//        const struct nbrec_nat *nat;
-//
-//        nat = op->od->nbr->nat[i];
-//
-//        ovs_be32 ip;
-//        if (!ip_parse(nat->external_ip, &ip) || !ip) {
-//            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
-//            VLOG_WARN_RL(&rl, "bad ip address %s in nat configuration "
-//                         "for router %s", nat->external_ip, op->key);
-//            continue;
-//        }
-//
-//        if (!strcmp(nat->type, "snat")) {
-//            snat_ips[n_snat_ips++] = ip;
-//            continue;
-//        }
-//
-//        /* ARP handling for external IP addresses.
-//         *
-//         * DNAT IP addresses are external IP addresses that need ARP
-//         * handling. */
-//        ds_clear(&match);
-//        ds_put_format(&match,
-//                      "inport == %s && arp.tpa == "IP_FMT" && arp.op == 1",
-//                      op->json_key, IP_ARGS(ip));
-//
-//        ds_clear(&actions);
-//        ds_put_format(&actions,
-//            "eth.dst = eth.src; "
-//            "arp.op = 2; /* ARP reply */ "
-//            "arp.tha = arp.sha; ");
-//
-//        if (op->od->l3dgw_port && op == op->od->l3dgw_port) {
-//            struct eth_addr mac;
-//            if (nat->external_mac &&
-//                eth_addr_from_string(nat->external_mac, &mac)
-//                && nat->logical_port) {
-//                /* distributed NAT case, use nat->external_mac */
-//                ds_put_format(&actions,
-//                    "eth.src = "ETH_ADDR_FMT"; "
-//                    "arp.sha = "ETH_ADDR_FMT"; ",
-//                    ETH_ADDR_ARGS(mac),
-//                    ETH_ADDR_ARGS(mac));
-//                /* Traffic with eth.src = nat->external_mac should only be
-//                 * sent from the chassis where nat->logical_port is
-//                 * resident, so that upstream MAC learning points to the
-//                 * correct chassis.  Also need to avoid generation of
-//                 * multiple ARP responses from different chassis. */
-//                ds_put_format(&match, " && is_chassis_resident(\"%s\")",
-//                              nat->logical_port);
-//            } else {
-//                ds_put_format(&actions,
-//                    "eth.src = %s; "
-//                    "arp.sha = %s; ",
-//                    op->lrp_networks.ea_s,
-//                    op->lrp_networks.ea_s);
-//                /* Traffic with eth.src = l3dgw_port->lrp_networks.ea_s
-//                 * should only be sent from the "redirect-chassis", so that
-//                 * upstream MAC learning points to the "redirect-chassis".
-//                 * Also need to avoid generation of multiple ARP responses
-//                 * from different chassis. */
-//                if (op->od->l3redirect_port) {
-//                    ds_put_format(&match, " && is_chassis_resident(%s)",
-//                                  op->od->l3redirect_port->json_key);
-//                }
-//            }
-//        } else {
-//            ds_put_format(&actions,
-//                "eth.src = %s; "
-//                "arp.sha = %s; ",
-//                op->lrp_networks.ea_s,
-//                op->lrp_networks.ea_s);
-//        }
-//        ds_put_format(&actions,
-//            "arp.tpa = arp.spa; "
-//            "arp.spa = "IP_FMT"; "
-//            "outport = %s; "
-//            "flags.loopback = 1; "
-//            "output;",
-//            IP_ARGS(ip),
-//            op->json_key);
-//        ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_INPUT, 90,
-//                      ds_cstr(&match), ds_cstr(&actions));
-//    }
-//
-//        if (!smap_get(&op->od->nbr->options, "chassis")
-//            && !op->od->l3dgw_port) {
-//            /* UDP/TCP port unreachable. */
-//            for (int i = 0; i < op->lrp_networks.n_ipv4_addrs; i++) {
-//                ds_clear(&match);
-//                ds_put_format(&match,
-//                              "ip4 && ip4.dst == %s && !ip.later_frag && udp",
-//                              op->lrp_networks.ipv4_addrs[i].addr_s);
-//                const char *action = "icmp4 {"
-//                                     "eth.dst <-> eth.src; "
-//                                     "ip4.dst <-> ip4.src; "
-//                                     "ip.ttl = 255; "
-//                                     "icmp4.type = 3; "
-//                                     "icmp4.code = 3; "
-//                                     "next; };";
-//                ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_INPUT, 80,
-//                              ds_cstr(&match), action);
-//
-//                ds_clear(&match);
-//                ds_put_format(&match,
-//                              "ip4 && ip4.dst == %s && !ip.later_frag && tcp",
-//                              op->lrp_networks.ipv4_addrs[i].addr_s);
-//                action = "tcp_reset {"
-//                         "eth.dst <-> eth.src; "
-//                         "ip4.dst <-> ip4.src; "
-//                         "next; };";
-//                ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_INPUT, 80,
-//                              ds_cstr(&match), action);
-//
-//                ds_clear(&match);
-//                ds_put_format(&match,
-//                              "ip4 && ip4.dst == %s && !ip.later_frag",
-//                              op->lrp_networks.ipv4_addrs[i].addr_s);
-//                action = "icmp4 {"
-//                         "eth.dst <-> eth.src; "
-//                         "ip4.dst <-> ip4.src; "
-//                         "ip.ttl = 255; "
-//                         "icmp4.type = 3; "
-//                         "icmp4.code = 2; "
-//                         "next; };";
-//                ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_INPUT, 70,
-//                              ds_cstr(&match), action);
-//            }
-//        }
-//
-//        ds_clear(&match);
-//        ds_put_cstr(&match, "ip4.dst == {");
-//        bool has_drop_ips = false;
-//        for (int i = 0; i < op->lrp_networks.n_ipv4_addrs; i++) {
-//            bool snat_ip_is_router_ip = false;
-//            for (int j = 0; j < n_snat_ips; j++) {
-//                /* Packets to SNAT IPs should not be dropped. */
-//                if (op->lrp_networks.ipv4_addrs[i].addr == snat_ips[j]) {
-//                    snat_ip_is_router_ip = true;
-//                    break;
-//                }
-//            }
-//            if (snat_ip_is_router_ip) {
-//                continue;
-//            }
-//            ds_put_format(&match, "%s, ",
-//                          op->lrp_networks.ipv4_addrs[i].addr_s);
-//            has_drop_ips = true;
-//        }
-//        ds_chomp(&match, ' ');
-//        ds_chomp(&match, ',');
-//        ds_put_cstr(&match, "}");
-//
-//        if (has_drop_ips) {
-//            /* Drop IP traffic to this router. */
-//            ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_INPUT, 60,
-//                          ds_cstr(&match), "drop;");
-//        }
-//
-//        free(snat_ips);
-//    }
 
 /*
  * Datapath tunnel key allocation:

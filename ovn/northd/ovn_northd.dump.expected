@@ -49,30 +49,38 @@ OVN_Southbound.DeltaPlus_Gateway_Chassis{"7ca7b79b-ba4f-36ae-e342-f650b1b2c09b",
 OVN_Southbound.DeltaPlus_Gateway_Chassis{"c4d42fb6-cb73-569f-7f4c-b0ede516cb51","gateway_chassis1",std_Set { x: {329700517176903794794161411552484030721} },5,std_Map { x: {} },std_Map { x: {} }}
 
 OVN_Southbound_DeltaPlus_Logical_Flow:
-OVN_Southbound.DeltaPlus_Logical_Flow{std.Left{126721406131080520775202535181152044108},"ingress",18446744073709551615,0,"1","next;",std_Map { x: {} }}
-OVN_Southbound.DeltaPlus_Logical_Flow{std.Left{126721406131080520775202535181152044108},"ingress",18446744073709551615,30,"ip4 && ip.ttl == {0, 1}","drop;",std_Map { x: {} }}
-OVN_Southbound.DeltaPlus_Logical_Flow{std.Left{126721406131080520775202535181152044108},"ingress",18446744073709551615,50,"eth.bcast","drop;",std_Map { x: {} }}
-OVN_Southbound.DeltaPlus_Logical_Flow{std.Left{126721406131080520775202535181152044108},"ingress",18446744073709551615,50,"eth.dst == 12:34:56:78:9a:bc && inport == \"redirect_port3\"","next;",std_Map { x: {} }}
-OVN_Southbound.DeltaPlus_Logical_Flow{std.Left{126721406131080520775202535181152044108},"ingress",18446744073709551615,50,"eth.dst == aa:bb:cc:dd:ee:ff && inport == \"redirect_port1\" && is_chassis_resident(\"cr-redirect_port1\")","next;",std_Map { x: {} }}
-OVN_Southbound.DeltaPlus_Logical_Flow{std.Left{126721406131080520775202535181152044108},"ingress",18446744073709551615,50,"eth.mcast && inport == \"redirect_port1\"","next;",std_Map { x: {} }}
-OVN_Southbound.DeltaPlus_Logical_Flow{std.Left{126721406131080520775202535181152044108},"ingress",18446744073709551615,50,"eth.mcast && inport == \"redirect_port3\"","next;",std_Map { x: {} }}
-OVN_Southbound.DeltaPlus_Logical_Flow{std.Left{126721406131080520775202535181152044108},"ingress",18446744073709551615,80,"nd_ns","put_nd(inport, ip6.src, nd.sll);",std_Map { x: {} }}
-OVN_Southbound.DeltaPlus_Logical_Flow{std.Left{126721406131080520775202535181152044108},"ingress",18446744073709551615,90,"arp.op == 2","put_arp(inport, arp.spa, arp.sha);",std_Map { x: {} }}
-OVN_Southbound.DeltaPlus_Logical_Flow{std.Left{126721406131080520775202535181152044108},"ingress",18446744073709551615,90,"nd_na","put_nd(inport, nd.target, nd.tll);",std_Map { x: {} }}
-OVN_Southbound.DeltaPlus_Logical_Flow{std.Left{126721406131080520775202535181152044108},"ingress",18446744073709551615,100,"ip4.mcast || ip4.src == 255.255.255.255 || ip4.src == 127.0.0.0/8 || ip4.dst == 127.0.0.0/8 || ip4.src == 0.0.0.0/8 || ip4.dst == 0.0.0.0/8","drop;",std_Map { x: {} }}
-OVN_Southbound.DeltaPlus_Logical_Flow{std.Left{126721406131080520775202535181152044108},"ingress",18446744073709551615,100,"vlan.present || eth.src[40]","drop;",std_Map { x: {} }}
-OVN_Southbound.DeltaPlus_Logical_Flow{std.Right{"7ca7b79b-ba4f-36ae-e342-f650b1b2c09b"},"ingress",18446744073709551615,0,"1","next;",std_Map { x: {} }}
-OVN_Southbound.DeltaPlus_Logical_Flow{std.Right{"7ca7b79b-ba4f-36ae-e342-f650b1b2c09b"},"ingress",18446744073709551615,30,"ip4 && ip.ttl == {0, 1}","drop;",std_Map { x: {} }}
-OVN_Southbound.DeltaPlus_Logical_Flow{std.Right{"7ca7b79b-ba4f-36ae-e342-f650b1b2c09b"},"ingress",18446744073709551615,50,"eth.bcast","drop;",std_Map { x: {} }}
-OVN_Southbound.DeltaPlus_Logical_Flow{std.Right{"7ca7b79b-ba4f-36ae-e342-f650b1b2c09b"},"ingress",18446744073709551615,50,"eth.dst == 11:22:33:44:55:66 && inport == \"redirect_port2\" && is_chassis_resident(\"cr-redirect_port2\")","next;",std_Map { x: {} }}
-OVN_Southbound.DeltaPlus_Logical_Flow{std.Right{"7ca7b79b-ba4f-36ae-e342-f650b1b2c09b"},"ingress",18446744073709551615,50,"eth.dst == 9c:b6:d0:11:ae:c1 && inport == \"lrp1\"","next;",std_Map { x: {} }}
-OVN_Southbound.DeltaPlus_Logical_Flow{std.Right{"7ca7b79b-ba4f-36ae-e342-f650b1b2c09b"},"ingress",18446744073709551615,50,"eth.mcast && inport == \"lrp1\"","next;",std_Map { x: {} }}
-OVN_Southbound.DeltaPlus_Logical_Flow{std.Right{"7ca7b79b-ba4f-36ae-e342-f650b1b2c09b"},"ingress",18446744073709551615,50,"eth.mcast && inport == \"redirect_port2\"","next;",std_Map { x: {} }}
-OVN_Southbound.DeltaPlus_Logical_Flow{std.Right{"7ca7b79b-ba4f-36ae-e342-f650b1b2c09b"},"ingress",18446744073709551615,80,"nd_ns","put_nd(inport, ip6.src, nd.sll);",std_Map { x: {} }}
-OVN_Southbound.DeltaPlus_Logical_Flow{std.Right{"7ca7b79b-ba4f-36ae-e342-f650b1b2c09b"},"ingress",18446744073709551615,90,"arp.op == 2","put_arp(inport, arp.spa, arp.sha);",std_Map { x: {} }}
-OVN_Southbound.DeltaPlus_Logical_Flow{std.Right{"7ca7b79b-ba4f-36ae-e342-f650b1b2c09b"},"ingress",18446744073709551615,90,"nd_na","put_nd(inport, nd.target, nd.tll);",std_Map { x: {} }}
-OVN_Southbound.DeltaPlus_Logical_Flow{std.Right{"7ca7b79b-ba4f-36ae-e342-f650b1b2c09b"},"ingress",18446744073709551615,100,"ip4.mcast || ip4.src == 255.255.255.255 || ip4.src == 127.0.0.0/8 || ip4.dst == 127.0.0.0/8 || ip4.src == 0.0.0.0/8 || ip4.dst == 0.0.0.0/8","drop;",std_Map { x: {} }}
-OVN_Southbound.DeltaPlus_Logical_Flow{std.Right{"7ca7b79b-ba4f-36ae-e342-f650b1b2c09b"},"ingress",18446744073709551615,100,"vlan.present || eth.src[40]","drop;",std_Map { x: {} }}
+OVN_Southbound.DeltaPlus_Logical_Flow{std.Left{126721406131080520775202535181152044108},"ingress",0,50,"eth.dst == 12:34:56:78:9a:bc && inport == \"redirect_port3\"","next;",std_Map { x: {} }}
+OVN_Southbound.DeltaPlus_Logical_Flow{std.Left{126721406131080520775202535181152044108},"ingress",0,50,"eth.dst == aa:bb:cc:dd:ee:ff && inport == \"redirect_port1\" && is_chassis_resident(\"cr-redirect_port1\")","next;",std_Map { x: {} }}
+OVN_Southbound.DeltaPlus_Logical_Flow{std.Left{126721406131080520775202535181152044108},"ingress",0,50,"eth.mcast && inport == \"redirect_port1\"","next;",std_Map { x: {} }}
+OVN_Southbound.DeltaPlus_Logical_Flow{std.Left{126721406131080520775202535181152044108},"ingress",0,50,"eth.mcast && inport == \"redirect_port3\"","next;",std_Map { x: {} }}
+OVN_Southbound.DeltaPlus_Logical_Flow{std.Left{126721406131080520775202535181152044108},"ingress",0,100,"vlan.present || eth.src[40]","drop;",std_Map { x: {} }}
+OVN_Southbound.DeltaPlus_Logical_Flow{std.Left{126721406131080520775202535181152044108},"ingress",1,0,"1","next;",std_Map { x: {} }}
+OVN_Southbound.DeltaPlus_Logical_Flow{std.Left{126721406131080520775202535181152044108},"ingress",1,30,"ip4 && ip.ttl == {0, 1}","drop;",std_Map { x: {} }}
+OVN_Southbound.DeltaPlus_Logical_Flow{std.Left{126721406131080520775202535181152044108},"ingress",1,50,"eth.bcast","drop;",std_Map { x: {} }}
+OVN_Southbound.DeltaPlus_Logical_Flow{std.Left{126721406131080520775202535181152044108},"ingress",1,80,"nd_ns","put_nd(inport, ip6.src, nd.sll);",std_Map { x: {} }}
+OVN_Southbound.DeltaPlus_Logical_Flow{std.Left{126721406131080520775202535181152044108},"ingress",1,90,"arp.op == 2","put_arp(inport, arp.spa, arp.sha);",std_Map { x: {} }}
+OVN_Southbound.DeltaPlus_Logical_Flow{std.Left{126721406131080520775202535181152044108},"ingress",1,90,"nd_na","put_nd(inport, nd.target, nd.tll);",std_Map { x: {} }}
+OVN_Southbound.DeltaPlus_Logical_Flow{std.Left{126721406131080520775202535181152044108},"ingress",1,100,"ip4.mcast || ip4.src == 255.255.255.255 || ip4.src == 127.0.0.0/8 || ip4.dst == 127.0.0.0/8 || ip4.src == 0.0.0.0/8 || ip4.dst == 0.0.0.0/8","drop;",std_Map { x: {} }}
+OVN_Southbound.DeltaPlus_Logical_Flow{std.Right{"7ca7b79b-ba4f-36ae-e342-f650b1b2c09b"},"ingress",0,50,"eth.dst == 11:22:33:44:55:66 && inport == \"redirect_port2\" && is_chassis_resident(\"cr-redirect_port2\")","next;",std_Map { x: {} }}
+OVN_Southbound.DeltaPlus_Logical_Flow{std.Right{"7ca7b79b-ba4f-36ae-e342-f650b1b2c09b"},"ingress",0,50,"eth.dst == 9c:b6:d0:11:ae:c1 && inport == \"lrp1\"","next;",std_Map { x: {} }}
+OVN_Southbound.DeltaPlus_Logical_Flow{std.Right{"7ca7b79b-ba4f-36ae-e342-f650b1b2c09b"},"ingress",0,50,"eth.mcast && inport == \"lrp1\"","next;",std_Map { x: {} }}
+OVN_Southbound.DeltaPlus_Logical_Flow{std.Right{"7ca7b79b-ba4f-36ae-e342-f650b1b2c09b"},"ingress",0,50,"eth.mcast && inport == \"redirect_port2\"","next;",std_Map { x: {} }}
+OVN_Southbound.DeltaPlus_Logical_Flow{std.Right{"7ca7b79b-ba4f-36ae-e342-f650b1b2c09b"},"ingress",0,100,"vlan.present || eth.src[40]","drop;",std_Map { x: {} }}
+OVN_Southbound.DeltaPlus_Logical_Flow{std.Right{"7ca7b79b-ba4f-36ae-e342-f650b1b2c09b"},"ingress",1,0,"1","next;",std_Map { x: {} }}
+OVN_Southbound.DeltaPlus_Logical_Flow{std.Right{"7ca7b79b-ba4f-36ae-e342-f650b1b2c09b"},"ingress",1,30,"ip4 && ip.ttl == {0, 1}","drop;",std_Map { x: {} }}
+OVN_Southbound.DeltaPlus_Logical_Flow{std.Right{"7ca7b79b-ba4f-36ae-e342-f650b1b2c09b"},"ingress",1,40,"inport == \"redirect_port2\" && ip4 && ip.ttl == {0, 1} && !ip.later_frag","icmp4 {eth.dst <-> eth.src; icmp4.type = 11; /* Time exceeded */ icmp4.code = 0; /* TTL exceeded in transit */ ip4.dst = ip4.src; ip4.src = 10.13.1.7; ip.ttl = 255; next; };",std_Map { x: {} }}
+OVN_Southbound.DeltaPlus_Logical_Flow{std.Right{"7ca7b79b-ba4f-36ae-e342-f650b1b2c09b"},"ingress",1,50,"eth.bcast","drop;",std_Map { x: {} }}
+OVN_Southbound.DeltaPlus_Logical_Flow{std.Right{"7ca7b79b-ba4f-36ae-e342-f650b1b2c09b"},"ingress",1,60,"ip4.dst == {10.13.1.7}","drop;",std_Map { x: {} }}
+OVN_Southbound.DeltaPlus_Logical_Flow{std.Right{"7ca7b79b-ba4f-36ae-e342-f650b1b2c09b"},"ingress",1,80,"inport == \"redirect_port2\" && arp.spa == 10.13.1.7/32 && arp.op == 1 && is_chassis_resident(\"redirect_port2\")","put_arp(inport, arp.spa, arp.sha);",std_Map { x: {} }}
+OVN_Southbound.DeltaPlus_Logical_Flow{std.Right{"7ca7b79b-ba4f-36ae-e342-f650b1b2c09b"},"ingress",1,80,"nd_ns","put_nd(inport, ip6.src, nd.sll);",std_Map { x: {} }}
+OVN_Southbound.DeltaPlus_Logical_Flow{std.Right{"7ca7b79b-ba4f-36ae-e342-f650b1b2c09b"},"ingress",1,90,"arp.op == 2","put_arp(inport, arp.spa, arp.sha);",std_Map { x: {} }}
+OVN_Southbound.DeltaPlus_Logical_Flow{std.Right{"7ca7b79b-ba4f-36ae-e342-f650b1b2c09b"},"ingress",1,90,"inport == \"lrp1\" && arp.tpa == 10.13.1.5 && arp.op == 1","eth.dst = eth.src; arp.op = 2; /* ARP reply */ arp.tha = arp.sha; eth.src = 9c:b6:d0:11:ae:c1; arp.sha = 9c:b6:d0:11:ae:c1; arp.tpa = arp.spa; arp.spa = 10.13.1.5; outport = \"lrp1\"; flags.loopback = 1; output;",std_Map { x: {} }}
+OVN_Southbound.DeltaPlus_Logical_Flow{std.Right{"7ca7b79b-ba4f-36ae-e342-f650b1b2c09b"},"ingress",1,90,"inport == \"redirect_port2\" && arp.spa == 10.13.1.7/32 && arp.tpa == 10.13.1.7 && arp.op == 1 && is_chassis_resident(\"cr-redirect_port2\")","put_arp(inport, arp.spa, arp.sha); eth.dst = eth.src; eth.src = 11:22:33:44:55:66; arp.op = 2; /* ARP reply */ arp.tha = arp.sha; arp.sha = 11:22:33:44:55:66; arp.tpa = arp.spa; arp.spa = 10.13.1.7; outport = \"redirect_port2\"; flags.loopback = 1; output;",std_Map { x: {} }}
+OVN_Southbound.DeltaPlus_Logical_Flow{std.Right{"7ca7b79b-ba4f-36ae-e342-f650b1b2c09b"},"ingress",1,90,"inport == \"redirect_port2\" && arp.tpa == 10.13.1.5 && arp.op == 1 && is_chassis_resident(\"some_port\")","eth.dst = eth.src; arp.op = 2; /* ARP reply */ arp.tha = arp.sha; eth.src = 14:15:16:17:18:19; arp.sha = 14:15:16:17:18:19; arp.tpa = arp.spa; arp.spa = 10.13.1.5; outport = \"redirect_port2\"; flags.loopback = 1; output;",std_Map { x: {} }}
+OVN_Southbound.DeltaPlus_Logical_Flow{std.Right{"7ca7b79b-ba4f-36ae-e342-f650b1b2c09b"},"ingress",1,90,"ip4.dst == 10.13.1.7 && icmp4.type == 8 && icmp4.code == 0","ip4.dst <-> ip4.src; ip.ttl = 255; icmp4.type = 0; flags.loopback = 1; next; ",std_Map { x: {} }}
+OVN_Southbound.DeltaPlus_Logical_Flow{std.Right{"7ca7b79b-ba4f-36ae-e342-f650b1b2c09b"},"ingress",1,90,"nd_na","put_nd(inport, nd.target, nd.tll);",std_Map { x: {} }}
+OVN_Southbound.DeltaPlus_Logical_Flow{std.Right{"7ca7b79b-ba4f-36ae-e342-f650b1b2c09b"},"ingress",1,100,"ip4.mcast || ip4.src == 255.255.255.255 || ip4.src == 127.0.0.0/8 || ip4.dst == 127.0.0.0/8 || ip4.src == 0.0.0.0/8 || ip4.dst == 0.0.0.0/8","drop;",std_Map { x: {} }}
+OVN_Southbound.DeltaPlus_Logical_Flow{std.Right{"7ca7b79b-ba4f-36ae-e342-f650b1b2c09b"},"ingress",1,100,"ip4.src == {10.13.1.7, 10.13.1.7} && reg9[1] == 0","drop;",std_Map { x: {} }}
 OVN_Southbound.DeltaPlus_Logical_Flow{std.Right{"906d1cfd-7661-a2a0-a24c-a17e7ccfa206"},"egress",0,0,"1","next;",std_Map { x: {} }}
 OVN_Southbound.DeltaPlus_Logical_Flow{std.Right{"906d1cfd-7661-a2a0-a24c-a17e7ccfa206"},"egress",0,100,"ip","reg0[0] = 1; next;",std_Map { x: {} }}
 OVN_Southbound.DeltaPlus_Logical_Flow{std.Right{"906d1cfd-7661-a2a0-a24c-a17e7ccfa206"},"egress",0,110,"nd || nd_rs || nd_ra","next;",std_Map { x: {} }}
@@ -208,9 +216,9 @@ OVN_Southbound.DeltaPlus_Port_Binding{"5a7bc6be-6a8e-9e9a-5449-37c53cdf3bde","ls
 OVN_Southbound.DeltaPlus_Port_Binding{"70a30046-d48b-28a3-d947-627317b34b56","lsp1","localnet",std_Set { x: {} },std_Map { x: {"option1": "val_option1"} },std.Right{"906d1cfd-7661-a2a0-a24c-a17e7ccfa206"},3,std_Set { x: {} },std_Set { x: {} },std_Set { x: {"66:55:44:33:22:11 10.10.10.101", "aa:aa:aa:aa:aa:aa fe80::250:56ff:fec0:8", "ff:ff:ff:ff:ff:ff 10.10.10.102"} },std_Set { x: {} },std_Map { x: {"name": "lsp1_neutron_port", "neutron:port_name": "lsp1_neutron_port"} }}
 OVN_Southbound.DeltaPlus_Port_Binding{"839daa17-da9f-beba-9a4f-4babbc82b61e","redirect_port3","l3gateway",std_Set { x: {} },std_Map { x: {"l3gateway-chassis": "690dc4b6-3a95-46ea-90f5-e46818f2f1a3"} },std.Left{126721406131080520775202535181152044108},1,std_Set { x: {} },std_Set { x: {} },std_Set { x: {"12:34:56:78:9a:bc"} },std_Set { x: {} },std_Map { x: {} }}
 OVN_Southbound.DeltaPlus_Port_Binding{"90c7adf9-9903-169d-fc4d-c038b1134253","redirect_port1","l3gateway",std_Set { x: {} },std_Map { x: {"l3gateway-chassis": "690dc4b6-3a95-46ea-90f5-e46818f2f1a3"} },std.Left{126721406131080520775202535181152044108},2,std_Set { x: {} },std_Set { x: {} },std_Set { x: {"aa:bb:cc:dd:ee:ff"} },std_Set { x: {} },std_Map { x: {} }}
-OVN_Southbound.DeltaPlus_Port_Binding{"af0dcdfd-f290-d0a3-c244-db9f1e142eba","redirect_port2","l3gateway",std_Set { x: {} },std_Map { x: {"l3gateway-chassis": "690dc4b6-3a95-46ea-90f5-e46818f2f1a3"} },std.Right{"7ca7b79b-ba4f-36ae-e342-f650b1b2c09b"},1,std_Set { x: {} },std_Set { x: {} },std_Set { x: {"11:22:33:44:55:66"} },std_Set { x: {} },std_Map { x: {} }}
+OVN_Southbound.DeltaPlus_Port_Binding{"af0dcdfd-f290-d0a3-c244-db9f1e142eba","redirect_port2","l3gateway",std_Set { x: {} },std_Map { x: {"l3gateway-chassis": "690dc4b6-3a95-46ea-90f5-e46818f2f1a3"} },std.Right{"7ca7b79b-ba4f-36ae-e342-f650b1b2c09b"},1,std_Set { x: {} },std_Set { x: {} },std_Set { x: {"10.13.1.7 11:22:33:44:55:66"} },std_Set { x: {} },std_Map { x: {} }}
 OVN_Southbound.DeltaPlus_Port_Binding{"cr90c7adf9-9903-169d-fc4d-c038b1134253","redirect_port1","chassisredirect",std_Set { x: {std.Right{"c4d42fb6-cb73-569f-7f4c-b0ede516cb51"}} },std_Map { x: {"distributed-port": "cr-redirect_port1"} },std.Left{126721406131080520775202535181152044108},3,std_Set { x: {} },std_Set { x: {} },std_Set { x: {"aa:bb:cc:dd:ee:ff"} },std_Set { x: {} },std_Map { x: {} }}
-OVN_Southbound.DeltaPlus_Port_Binding{"craf0dcdfd-f290-d0a3-c244-db9f1e142eba","redirect_port2","chassisredirect",std_Set { x: {std.Right{"7ca7b79b-ba4f-36ae-e342-f650b1b2c09b"}} },std_Map { x: {"distributed-port": "cr-redirect_port2"} },std.Right{"7ca7b79b-ba4f-36ae-e342-f650b1b2c09b"},2,std_Set { x: {} },std_Set { x: {} },std_Set { x: {"11:22:33:44:55:66"} },std_Set { x: {} },std_Map { x: {} }}
+OVN_Southbound.DeltaPlus_Port_Binding{"craf0dcdfd-f290-d0a3-c244-db9f1e142eba","redirect_port2","chassisredirect",std_Set { x: {std.Right{"7ca7b79b-ba4f-36ae-e342-f650b1b2c09b"}} },std_Map { x: {"distributed-port": "cr-redirect_port2"} },std.Right{"7ca7b79b-ba4f-36ae-e342-f650b1b2c09b"},2,std_Set { x: {} },std_Set { x: {} },std_Set { x: {"10.13.1.7 11:22:33:44:55:66"} },std_Set { x: {} },std_Map { x: {} }}
 
 OVN_Southbound_DeltaPlus_RBAC_Permission:
 OVN_Southbound.DeltaPlus_RBAC_Permission{"6ffdc696-8bfb-4d82-b620-a00d39270b2f","MAC_Binding",std_Set { x: {""} },true,std_Set { x: {"datapath", "ip", "logical_port", "mac"} }}
@@ -226,6 +234,632 @@ OVN_Southbound.DeltaPlus_SB_Global{1234,std_Map { x: {} },std_Set { x: {} },std_
 
 OVN_Southbound_Update_Port_Binding:
 OVN_Southbound.Update_Port_Binding{242756087586965167273463356390064647873,"l3gateway",std_Set { x: {} },std_Map { x: {"l3gateway-chassis": "690dc4b6-3a95-46ea-90f5-e46818f2f1a3"} },std.Right{"7ca7b79b-ba4f-36ae-e342-f650b1b2c09b"},1,std_Set { x: {} },std_Set { x: {} },std_Set { x: {"9c:b6:d0:11:ae:c1"} },std_Set { x: {} },std_Map { x: {} }}
+
+Profile:
+current size of LSPortPSAddresses{.lsport=_0, .ps_addrs=_}.Arrange 560: 2
+current size of OVN_Southbound.DeltaPlus_DNS.Arrange 1931: 1
+current size of OVN_Southbound.DeltaPlus_Gateway_Chassis.Arrange 2204: 2
+current size of .Arrange 853: 2
+current size of LogicalSwitchDNS{.ls_uuid=_, .dns_uuid=_0}.Arrange 280: 1
+current size of rule (local).Arrange 827: 2
+current size of rule (local).Arrange 1938: 1
+current size of OVN_Southbound.Port_Binding{._uuid=_0, .logical_port=_, .__type=_, .gateway_chassis=_, .options=_, .datapath=_, .tunnel_key=_, .parent_port=_, .tag=_, .chassis=_, .mac=_, .nat_addresses=_, .external_ids=_}.Arrange 2768: 1
+current size of rule (local).Arrange 1743: 1
+current size of AddChassisResidentCheck{.lrp=_0, .add_check=_}.Arrange 874: 4
+current size of OVN_Southbound.DeltaPlus_Logical_Flow.Arrange 4517: 150
+current size of rule (local).Arrange 3542: 1
+current size of group.Group 2516: 1
+current size of rule (local).Arrange 2302: 1
+current size of rule (local).Arrange 3298: 1
+current size of .Arrange 3135: 9
+current size of .Arrange 2090: 2
+current size of .Arrange 2149: 2
+current size of .Arrange 2052: 2
+current size of SwitchRouterPeer{.lsp=_0, .lrp=_}.Arrange 808: 2
+current size of .Arrange 4462: 12
+current size of LogicalRouterSNATExternalIPs{.lr=_0, .external_ips=_}.Arrange 1162: 2
+current size of rule (local).Arrange 2883: 9
+current size of OVN_Southbound.UUIDMap_Port_Binding{.uuid_name=_0, .id=std.Right{.r=_}}.Arrange 2841: 9
+current size of OVN_Northbound.Logical_Router_Port{._uuid=_0, .name=_, .gateway_chassis=_, .options=_, .networks=_, .mac=_, .peer=_, .enabled=_, .ipv6_ra_configs=_, .external_ids=_}.Arrange 98: 4
+current size of .Arrange 3044: 2
+current size of rule (local).Arrange 3982: 3
+current size of .Arrange 2317: 2
+current size of group.Arrange 740: 2
+current size of rule (local).Arrange 647: 3
+current size of rule (local).Arrange 3884: 3
+current size of group.Group 311: 1
+current size of .Arrange 690: 3
+current size of rule (local).Arrange 4423: 4
+current size of rule (local).Arrange 1007: 1
+current size of .Arrange 328: 1
+current size of LRPortNetworksIPv4Addr{.lrport=_0, .addr=_}.Arrange 246: 1
+current size of LogicalPortSwitch{.lport=_, .lswitch=_0}.Arrange 266: 3
+current size of group.Group 769: 1
+current size of rule (local).Arrange 114: 4
+current size of OVN_Northbound.Load_Balancer{._uuid=_0, .name=_, .vips=_, .protocol=_, .external_ids=_}.Arrange 29: 1
+current size of .Arrange 2700: 4
+current size of rule (local).Arrange 4430: 4
+current size of .Arrange 1460: 1
+current size of rule (local).Arrange 1541: 1
+current size of rule (local).Arrange 891: 3
+current size of rule (local).Arrange 4339: 4
+current size of group.Arrange 1118: 1
+current size of LogicalPortRouter{.lport=_0, .lrouter=_}.Arrange 66: 4
+current size of rule (local).Arrange 924: 4
+current size of OVN_Southbound.Datapath_Binding{._uuid=_0, .tunnel_key=_, .external_ids=_}.Arrange 1768: 2
+current size of rule (local).Arrange 792: 2
+current size of .Arrange 2351: 1
+current size of .Arrange 2730: 4
+current size of rule (local).Arrange 4001: 1
+current size of rule (local).Arrange 4141: 2
+current size of .Arrange 2429: 1
+current size of .Arrange 2816: 1
+current size of rule (local).Arrange 1731: 1
+current size of _.Arrange 1790: 1
+current size of group.Arrange 4829: 4
+current size of OVN_Southbound.UUIDMap_Datapath_Binding{.uuid_name=_0, .id=_}.Arrange 1834: 4
+current size of rule (local).Arrange 627: 2
+current size of .Arrange 4526: 1
+current size of OVN_Southbound.DeltaPlus_Meter_Band.Arrange 2454: 1
+current size of OVN_Southbound.DeltaPlus_Meter.Arrange 2593: 1
+current size of rule (local).Arrange 224: 4
+current size of .Arrange 1137: 2
+current size of OVN_Northbound.Logical_Switch_Port{._uuid=_0, .name=_, .__type="router", .options=_, .parent_name=_, .tag_request=_, .tag=_, .addresses=_, .dynamic_addresses=_, .port_security=_, .up=_, .enabled=_, .dhcpv4_options=_, .dhcpv6_options=_, .external_ids=_}.Arrange 491: 2
+current size of rule (local).Arrange 4443: 150
+current size of .Arrange 2812: 9
+current size of LSPSwitchHasLocalnetPort{.lsp=_0, .has_localnet_port=true}.Arrange 711: 3
+current size of .Arrange 1876: 1
+current size of .Arrange 2942: 3
+current size of OVN_Southbound.Update_Port_Binding.Arrange 4604: 1
+current size of rule (local).Arrange 1724: 1
+current size of rule (local).Arrange 3812: 4
+current size of LogicalSwitchHasLBVIP{.ls=_0}.Arrange 392: 1
+current size of rule (local).Arrange 3640: 1
+current size of OVN_Southbound.DeltaPlus_RBAC_Role.Arrange 4913: 1
+current size of group.Arrange 2264: 9
+current size of rule (local).Arrange 1795: 3
+current size of TunKeyAllocation{.datapath=_0, .tunkey=_}.Arrange 2032: 3
+current size of group.Group 1120: 1
+current size of LogicalPortRouter{.lport=_, .lrouter=_0}.Arrange 62: 4
+current size of rule (local).Arrange 3824: 3
+current size of OVN_Southbound.Port_Binding{._uuid=_, .logical_port=_0, .__type=_, .gateway_chassis=_, .options=_, .datapath=_, .tunnel_key=_, .parent_port=_, .tag=_, .chassis=_, .mac=_, .nat_addresses=_, .external_ids=_}.Arrange 2764: 1
+current size of rule (local).Arrange 2912: 1
+current size of rule (local).Arrange 2773: 1
+current size of OVN_Northbound.QoS{._uuid=_0, .priority=_, .direction=_, .__match=_, .action=_, .bandwidth=_, .external_ids=_}.Arrange 1605: 1
+current size of group.Group 955: 3
+current size of rule (local).Arrange 1579: 1
+current size of .Arrange 849: 4
+current size of RouterPortIsRedirect{.lrp=_0, .is_redirect=_}.Arrange 192: 4
+current size of rule (local).Arrange 3378: 1
+current size of OVN_Northbound.DHCP_Options{._uuid=_0, .cidr=_, .options=_, .external_ids=_}.Arrange 14: 2
+current size of .Arrange 2086: 3
+current size of rule (local).Arrange 1490: 1
+current size of SwitchRouterPeer{.lsp=_, .lrp=_0}.Arrange 804: 2
+current size of OVN_Southbound.DeltaPlus_Multicast_Group.Arrange 3069: 2
+current size of rule (local).Arrange 3566: 1
+current size of rule (local).Arrange 4224: 3
+current size of rule (local).Arrange 4332: 4
+current size of rule (local).Arrange 813: 4
+current size of OVN_Southbound.UUIDMap_Port_Binding{.uuid_name=_, .id=std.Left{.l=_0}}.Arrange 2837: 1
+current size of rule (local).Arrange 4375: 4
+current size of group.Arrange 2990: 5
+current size of rule (local).Arrange 3578: 1
+current size of rule (local).Arrange 820: 4
+current size of .Arrange 2009: 1
+current size of .Arrange 686: 3
+current size of rule (local).Arrange 3699: 1
+current size of PortTunKeyAllocation{.port=_0, .tunkey=_}.Arrange 2969: 9
+current size of LogicalPortSwitch{.lport=_0, .lswitch=_}.Arrange 262: 3
+current size of rule (local).Arrange 1503: 1
+current size of PortDynamicAddresses{.lsport=_0, .ip4addrs=_, .ip6addrs=_}.Arrange 970: 3
+current size of OVN_Southbound.DeltaMinus_Port_Binding.Arrange 4551: 0
+current size of rule (local).Arrange 733: 3
+current size of rule (local).Arrange 3530: 1
+current size of OVN_Southbound.UUIDMap_Datapath_Binding{.uuid_name=_, .id=std.Left{.l=_0}}.Arrange 1838: 1
+current size of OVN_Southbound.Chassis{._uuid=_, .name=_0, .hostname=_, .encaps=_, .vtep_logical_switches=_, .nb_cfg=_, .external_ids=_}.Arrange 1717: 1
+current size of rule (local).Arrange 4037: 1
+current size of rule (local).Arrange 4320: 1
+current size of rule (local).Arrange 2461: 1
+current size of .Arrange 1141: 1
+current size of .Arrange 2399: 1
+current size of LogicalSwitchLocalnetPort{.ls=_0, .lsp=_}.Arrange 659: 1
+current size of rule (local).Arrange 4049: 1
+current size of group.Group 1854: 1
+current size of .Arrange 2631: 25
+current size of group.Arrange 565: 2
+current size of rule (local).Arrange 4351: 4
+current size of rule (local).Arrange 1529: 1
+current size of group.Group 2992: 2
+current size of rule (local).Arrange 3970: 3
+current size of rule (local).Arrange 2974: 2
+current size of LBVIP{.lb=_0, .vip=_}.Arrange 43: 1
+current size of rule (local).Arrange 3872: 3
+current size of .Arrange 588: 1
+current size of group.Arrange 2514: 1
+current size of .Arrange 1809: 3
+current size of LogicalSwitchHasStatefulACL{.ls=_0, .has_stateful_acl=_}.Arrange 1481: 1
+current size of group.Arrange 121: 2
+current size of OVN_Northbound.Gateway_Chassis{._uuid=_0, .name=_, .chassis_name=_, .priority=_, .external_ids=_, .options=_}.Arrange 24: 1
+current size of OVN_Northbound.Logical_Switch_Port{._uuid=_0, .name=_, .__type="localnet", .options=_, .parent_name=_, .tag_request=_, .tag=_, .addresses=_, .dynamic_addresses=_, .port_security=_, .up=_, .enabled=_, .dhcpv4_options=_, .dhcpv6_options=_, .external_ids=_}.Arrange 487: 1
+current size of rule (local).Arrange 4148: 1
+current size of .Arrange 4564: 1
+current size of rule (local).Arrange 3286: 1
+current size of rule (local).Arrange 2118: 3
+current size of rule (local).Arrange 634: 2
+current size of OVN_Southbound.UUIDMap_Gateway_Chassis{.uuid_name=_0, .id=_}.Arrange 2250: 3
+current size of rule (local).Arrange 3621: 3
+current size of rule (local).Arrange 474: 1
+current size of rule (local).Arrange 3860: 3
+current size of group.Arrange 977: 5
+current size of rule (local).Arrange 3628: 1
+current size of group.Group 2266: 9
+current size of rule (local).Arrange 204: 4
+current size of OVN_Southbound.DeltaPlus_MAC_Binding.Arrange 2376: 0
+current size of rule (local).Arrange 1845: 1
+current size of rule (local).Arrange 107: 2
+current size of rule (local).Arrange 1055: 3
+current size of rule (local).Arrange 1014: 1
+current size of rule (local).Arrange 285: 1
+current size of .Arrange 4976: 1
+current size of group.Arrange 1852: 1
+current size of rule (local).Arrange 4025: 1
+current size of rule (local).Arrange 368: 1
+current size of rule (local).Arrange 3366: 1
+current size of group.Group 123: 2
+current size of rule (local).Arrange 2211: 2
+current size of group.Group 2892: 3
+current size of rule (local).Arrange 4212: 3
+current size of rule (local).Arrange 3958: 3
+current size of .Arrange 4858: 1
+current size of .Arrange 1813: 2
+current size of OVN_Northbound.NAT{._uuid=_0, .external_ip=_, .external_mac=_, .logical_ip=_, .logical_port=_, .__type=_, .external_ids=_}.Arrange 1094: 2
+current size of LogicalSwitchHasStatefulACL{.ls=_0, .has_stateful_acl=true}.Arrange 1485: 1
+current size of rule (local).Arrange 3908: 3
+current size of rule (local).Arrange 4129: 2
+current size of group.Group 4831: 1
+current size of .Arrange 4714: 4
+current size of rule (local).Arrange 1987: 1
+current size of rule (local).Arrange 3687: 1
+current size of LogicalSwitchQoS{.ls=_0, .qos_rule=_}.Arrange 406: 1
+current size of rule (local).Arrange 3554: 1
+current size of LSPortAddresses{.lsport=_0, .addrs=_}.Arrange 518: 3
+current size of rule (local).Arrange 3602: 3
+current size of LogicalRouterHasRedirectPort{.lr=_0, .has_redirect_port=true}.Arrange 153: 2
+current size of .Arrange 2225: 2
+current size of rule (local).Arrange 4200: 3
+current size of OVN_Southbound.UUIDMap_Port_Binding{.uuid_name=_0, .id=std.Left{.l=_}}.Arrange 2849: 1
+current size of .Arrange 2179: 2
+current size of rule (local).Arrange 3262: 2
+current size of rule (local).Arrange 3805: 3
+current size of OVN_Southbound.DeltaPlus_DHCP_Options.Arrange 2686: 25
+current size of rule (local).Arrange 4592: 9
+current size of rule (local).Arrange 3210: 9
+current size of rule (local).Arrange 1406: 3
+current size of OVN_Southbound.OutProxy_Port_Binding{.uuid_name=_, .logical_port=_0, .__type=_, .gateway_chassis=_, .options=_, .datapath=_, .tunnel_key=_, .parent_port=_, .tag=_, .mac=_, .nat_addresses=_, .external_ids=_}.Arrange 3229: 9
+current size of .Arrange 171: 2
+current size of .Arrange 2475: 1
+current size of rule (local).Arrange 1027: 1
+current size of group.Arrange 2890: 8
+current size of rule (local).Arrange 716: 3
+current size of .Arrange 584: 3
+current size of rule (local).Arrange 1434: 1
+current size of .Arrange 4790: 4
+current size of rule (local).Arrange 614: 3
+current size of OVN_Southbound.DeltaMinus_Datapath_Binding.Arrange 2077: 1
+current size of rule (local).Arrange 898: 2
+current size of OVN_Northbound.ACL{._uuid=_0, .name=_, .priority=_, .direction=_, .__match=_, .action=_, .log=_, .severity=_, .meter=_, .external_ids=_}.Arrange 7: 1
+current size of group.Arrange 767: 3
+current size of LSHasDNSRecords{.ls=_0}.Arrange 297: 1
+current size of rule (local).Arrange 454: 1
+current size of OVN_Southbound.DeltaPlus_RBAC_Permission.Arrange 4769: 4
+current size of .Arrange 4560: 9
+current size of rule (local).Arrange 931: 4
+current size of OVN_Southbound.DeltaPlus_SB_Global.Arrange 5001: 1
+current size of rule (local).Arrange 4363: 4
+current size of LSPortPSEthAddresses{.lsport=_0, .addrs=_}.Arrange 609: 4
+current size of rule (local).Arrange 1516: 1
+current size of group.Group 1959: 1
+current size of rule (local).Arrange 2289: 2
+current size of rule (local).Arrange 217: 4
+current size of group.Arrange 1957: 2
+current size of rule (local).Arrange 2274: 9
+current size of rule (local).Arrange 4117: 3
+current size of PortStaticAddresses{.lsport=_0, .ip4addrs=_, .ip6addrs=_}.Arrange 994: 3
+current size of .Arrange 4946: 1
+current size of OVN_Southbound.DeltaPlus_Datapath_Binding.Arrange 2111: 2
+current size of .Arrange 2355: 2
+current size of rule (local).Arrange 1975: 1
+current size of rule (local).Arrange 3274: 2
+current size of NotYetAllocatedPortTunKeys{.datapath=_0, .all_logical_ids=_}.Arrange 2907: 3
+current size of rule (local).Arrange 302: 1
+current size of LogicalRouterNAT{.lr=_0, .nat=_}.Arrange 1113: 2
+current size of OVN_Southbound.Datapath_Binding{._uuid=_, .tunnel_key=_, .external_ids=_0}.Arrange 1764: 2
+current size of rule (local).Arrange 3896: 3
+current size of LSPortIPv4Address{.lsport=_0, .ea_s=_, .addr=_}.Arrange 532: 2
+current size of rule (local).Arrange 1592: 1
+current size of rule (local).Arrange 2257: 9
+current size of group.Group 567: 1
+current size of LSPortIPv6Address{.lsport=_0, .ea_s=_, .addr=_}.Arrange 546: 1
+current size of LogicalSwitchLBVIP{.ls=_0, .vip=_}.Arrange 380: 1
+current size of .Arrange 4492: 150
+current size of OVN_Northbound.Logical_Router_Port{._uuid=_, .name=_0, .gateway_chassis=_, .options=_, .networks=_, .mac=_, .peer=_, .enabled=_, .ipv6_ra_configs=_, .external_ids=_}.Arrange 102: 4
+current size of rule (local).Arrange 1034: 1
+current size of .Arrange 2056: 3
+current size of .Arrange 1906: 1
+current size of rule (local).Arrange 664: 3
+current size of rule (local).Arrange 3848: 3
+current size of group.Arrange 953: 3
+current size of rule (local).Arrange 4013: 1
+current size of .Arrange 332: 1
+current size of rule (local).Arrange 879: 1
+current size of OVN_Southbound.DeltaMinus_MAC_Binding.Arrange 2342: 1
+current size of rule (local).Arrange 2507: 1
+current size of OVN_Northbound.Logical_Router{._uuid=_0, .name=_, .ports=_, .static_routes=_, .enabled=_, .nat=_, .load_balancer=_, .options=_, .external_ids=_}.Arrange 48: 2
+current size of .Arrange 2321: 1
+current size of rule (local).Arrange 4822: 4
+current size of rule (local).Arrange 2798: 9
+current size of rule (local).Arrange 1566: 1
+current size of rule (local).Arrange 905: 2
+current size of rule (local).Arrange 2983: 5
+current size of rule (local).Arrange 4181: 3
+current size of .Arrange 167: 4
+current size of rule (local).Arrange 461: 1
+current size of rule (local).Arrange 912: 2
+current size of OVN_Southbound.UUIDMap_RBAC_Permission{.uuid_name=_0, .id=_}.Arrange 4815: 5
+current size of rule (local).Arrange 3946: 3
+current size of rule (local).Arrange 4776: 4
+current size of rule (local).Arrange 760: 3
+current size of OVN_Southbound.DeltaPlus_DHCPv6_Options.Arrange 2755: 4
+current size of rule (local).Arrange 2037: 3
+current size of rule (local).Arrange 3590: 1
+current size of .Arrange 2661: 25
+current size of rule (local).Arrange 2600: 1
+current size of rule (local).Arrange 1101: 2
+current size of rule (local).Arrange 3836: 3
+current size of OVN_Southbound.DeltaPlus_Port_Binding.Arrange 4585: 8
+current size of group.Group 742: 1
+current size of rule (local).Arrange 3781: 1
+current size of group.Group 979: 3
+current size of rule (local).Arrange 4920: 1
+current size of rule (local).Arrange 3609: 1
+current size of rule (local).Arrange 197: 4
+current size of QueueIDAllocation{.port=_0, .qids=_}.Arrange 3205: 9
+current size of OVN_Northbound.Logical_Switch_Port{._uuid=_0, .name=_, .__type=_, .options=_, .parent_name=_, .tag_request=_, .tag=_, .addresses=_, .dynamic_addresses=_, .port_security=_, .up=_, .enabled=_, .dhcpv4_options=_, .dhcpv6_options=_, .external_ids=_}.Arrange 495: 3
+current size of OVN_Northbound.ACL{._uuid=_0, .name=_, .priority=_, .direction=_, .__match=_, .action="allow-related", .log=_, .severity=_, .meter=_, .external_ids=_}.Arrange 3: 1
+current size of rule (local).Arrange 3793: 1
+current size of .Arrange 4744: 4
+current size of LogicalSwitchRouterPort{.ls=_0, .lrp=_}.Arrange 728: 2
+current size of group.Group 1775: 1
+current size of LogicalSwitchLB{.ls=_0, .lb=_}.Arrange 363: 1
+current size of group.Arrange 1773: 2
+current size of group.Arrange 309: 1
+current size of rule (local).Arrange 3680: 1
+current size of QoSAction{.qos=_0, .key_action=_, .value_action=_}.Arrange 1619: 1
+current size of .Arrange 4530: 7
+current size of .Arrange 2005: 1
+current size of .Arrange 1456: 1
+current size of .Arrange 2568: 1
+current size of rule (local).Arrange 3217: 9
+current size of OVN_Southbound.UUIDMap_Port_Binding{.uuid_name=_0, .id=_}.Arrange 2845: 10
+current size of OVN_Northbound.DNS{._uuid=_0, .records=_, .external_ids=_}.Arrange 19: 1
+current size of LogicalSwitchACL{.ls=_0, .acl=_}.Arrange 1429: 1
+current size of rule (local).Arrange 3934: 3
+current size of .Arrange 4888: 1
+current size of .Arrange 2538: 1
+current size of OVN_Southbound.UUIDMap_Meter_Band{.uuid_name=_0, .id=_}.Arrange 2500: 2
+current size of rule (local).Arrange 1553: 1
+peak size of LSPortPSAddresses{.lsport=_0, .ps_addrs=_}.Arrange 560: 2
+peak size of OVN_Southbound.DeltaPlus_DNS.Arrange 1931: 1
+peak size of OVN_Southbound.DeltaPlus_Gateway_Chassis.Arrange 2204: 2
+peak size of .Arrange 853: 2
+peak size of LogicalSwitchDNS{.ls_uuid=_, .dns_uuid=_0}.Arrange 280: 1
+peak size of rule (local).Arrange 827: 2
+peak size of rule (local).Arrange 1938: 1
+peak size of OVN_Southbound.Port_Binding{._uuid=_0, .logical_port=_, .__type=_, .gateway_chassis=_, .options=_, .datapath=_, .tunnel_key=_, .parent_port=_, .tag=_, .chassis=_, .mac=_, .nat_addresses=_, .external_ids=_}.Arrange 2768: 1
+peak size of rule (local).Arrange 1743: 1
+peak size of AddChassisResidentCheck{.lrp=_0, .add_check=_}.Arrange 874: 4
+peak size of OVN_Southbound.DeltaPlus_Logical_Flow.Arrange 4517: 150
+peak size of rule (local).Arrange 3542: 1
+peak size of group.Group 2516: 1
+peak size of rule (local).Arrange 2302: 1
+peak size of rule (local).Arrange 3298: 1
+peak size of .Arrange 3135: 9
+peak size of .Arrange 2090: 2
+peak size of .Arrange 2149: 2
+peak size of .Arrange 2052: 2
+peak size of SwitchRouterPeer{.lsp=_0, .lrp=_}.Arrange 808: 2
+peak size of .Arrange 4462: 12
+peak size of LogicalRouterSNATExternalIPs{.lr=_0, .external_ips=_}.Arrange 1162: 2
+peak size of rule (local).Arrange 2883: 9
+peak size of OVN_Southbound.UUIDMap_Port_Binding{.uuid_name=_0, .id=std.Right{.r=_}}.Arrange 2841: 9
+peak size of OVN_Northbound.Logical_Router_Port{._uuid=_0, .name=_, .gateway_chassis=_, .options=_, .networks=_, .mac=_, .peer=_, .enabled=_, .ipv6_ra_configs=_, .external_ids=_}.Arrange 98: 4
+peak size of .Arrange 3044: 2
+peak size of rule (local).Arrange 3982: 3
+peak size of .Arrange 2317: 2
+peak size of group.Arrange 740: 2
+peak size of rule (local).Arrange 647: 3
+peak size of rule (local).Arrange 3884: 3
+peak size of group.Group 311: 1
+peak size of .Arrange 690: 3
+peak size of rule (local).Arrange 4423: 4
+peak size of rule (local).Arrange 1007: 1
+peak size of .Arrange 328: 1
+peak size of LRPortNetworksIPv4Addr{.lrport=_0, .addr=_}.Arrange 246: 1
+peak size of LogicalPortSwitch{.lport=_, .lswitch=_0}.Arrange 266: 3
+peak size of group.Group 769: 1
+peak size of rule (local).Arrange 114: 4
+peak size of OVN_Northbound.Load_Balancer{._uuid=_0, .name=_, .vips=_, .protocol=_, .external_ids=_}.Arrange 29: 1
+peak size of .Arrange 2700: 4
+peak size of rule (local).Arrange 4430: 4
+peak size of .Arrange 1460: 1
+peak size of rule (local).Arrange 1541: 1
+peak size of rule (local).Arrange 891: 3
+peak size of rule (local).Arrange 4339: 4
+peak size of group.Arrange 1118: 1
+peak size of LogicalPortRouter{.lport=_0, .lrouter=_}.Arrange 66: 4
+peak size of rule (local).Arrange 924: 4
+peak size of OVN_Southbound.Datapath_Binding{._uuid=_0, .tunnel_key=_, .external_ids=_}.Arrange 1768: 2
+peak size of rule (local).Arrange 792: 2
+peak size of .Arrange 2351: 1
+peak size of .Arrange 2730: 4
+peak size of rule (local).Arrange 4001: 1
+peak size of rule (local).Arrange 4141: 2
+peak size of .Arrange 2429: 1
+peak size of .Arrange 2816: 1
+peak size of rule (local).Arrange 1731: 1
+peak size of _.Arrange 1790: 1
+peak size of group.Arrange 4829: 4
+peak size of OVN_Southbound.UUIDMap_Datapath_Binding{.uuid_name=_0, .id=_}.Arrange 1834: 4
+peak size of rule (local).Arrange 627: 2
+peak size of .Arrange 4526: 1
+peak size of OVN_Southbound.DeltaPlus_Meter_Band.Arrange 2454: 1
+peak size of OVN_Southbound.DeltaPlus_Meter.Arrange 2593: 1
+peak size of rule (local).Arrange 224: 4
+peak size of .Arrange 1137: 2
+peak size of OVN_Northbound.Logical_Switch_Port{._uuid=_0, .name=_, .__type="router", .options=_, .parent_name=_, .tag_request=_, .tag=_, .addresses=_, .dynamic_addresses=_, .port_security=_, .up=_, .enabled=_, .dhcpv4_options=_, .dhcpv6_options=_, .external_ids=_}.Arrange 491: 2
+peak size of rule (local).Arrange 4443: 150
+peak size of .Arrange 2812: 9
+peak size of LSPSwitchHasLocalnetPort{.lsp=_0, .has_localnet_port=true}.Arrange 711: 3
+peak size of .Arrange 1876: 1
+peak size of .Arrange 2942: 3
+peak size of OVN_Southbound.Update_Port_Binding.Arrange 4604: 1
+peak size of rule (local).Arrange 1724: 1
+peak size of rule (local).Arrange 3812: 4
+peak size of LogicalSwitchHasLBVIP{.ls=_0}.Arrange 392: 1
+peak size of rule (local).Arrange 3640: 1
+peak size of OVN_Southbound.DeltaPlus_RBAC_Role.Arrange 4913: 1
+peak size of group.Arrange 2264: 9
+peak size of rule (local).Arrange 1795: 3
+peak size of TunKeyAllocation{.datapath=_0, .tunkey=_}.Arrange 2032: 3
+peak size of group.Group 1120: 1
+peak size of LogicalPortRouter{.lport=_, .lrouter=_0}.Arrange 62: 4
+peak size of rule (local).Arrange 3824: 3
+peak size of OVN_Southbound.Port_Binding{._uuid=_, .logical_port=_0, .__type=_, .gateway_chassis=_, .options=_, .datapath=_, .tunnel_key=_, .parent_port=_, .tag=_, .chassis=_, .mac=_, .nat_addresses=_, .external_ids=_}.Arrange 2764: 1
+peak size of rule (local).Arrange 2912: 1
+peak size of rule (local).Arrange 2773: 1
+peak size of OVN_Northbound.QoS{._uuid=_0, .priority=_, .direction=_, .__match=_, .action=_, .bandwidth=_, .external_ids=_}.Arrange 1605: 1
+peak size of group.Group 955: 3
+peak size of rule (local).Arrange 1579: 1
+peak size of .Arrange 849: 4
+peak size of RouterPortIsRedirect{.lrp=_0, .is_redirect=_}.Arrange 192: 4
+peak size of rule (local).Arrange 3378: 1
+peak size of OVN_Northbound.DHCP_Options{._uuid=_0, .cidr=_, .options=_, .external_ids=_}.Arrange 14: 2
+peak size of .Arrange 2086: 3
+peak size of rule (local).Arrange 1490: 1
+peak size of SwitchRouterPeer{.lsp=_, .lrp=_0}.Arrange 804: 2
+peak size of OVN_Southbound.DeltaPlus_Multicast_Group.Arrange 3069: 2
+peak size of rule (local).Arrange 3566: 1
+peak size of rule (local).Arrange 4224: 3
+peak size of rule (local).Arrange 4332: 4
+peak size of rule (local).Arrange 813: 4
+peak size of OVN_Southbound.UUIDMap_Port_Binding{.uuid_name=_, .id=std.Left{.l=_0}}.Arrange 2837: 1
+peak size of rule (local).Arrange 4375: 4
+peak size of group.Arrange 2990: 5
+peak size of rule (local).Arrange 3578: 1
+peak size of rule (local).Arrange 820: 4
+peak size of .Arrange 2009: 1
+peak size of .Arrange 686: 3
+peak size of rule (local).Arrange 3699: 1
+peak size of PortTunKeyAllocation{.port=_0, .tunkey=_}.Arrange 2969: 9
+peak size of LogicalPortSwitch{.lport=_0, .lswitch=_}.Arrange 262: 3
+peak size of rule (local).Arrange 1503: 1
+peak size of PortDynamicAddresses{.lsport=_0, .ip4addrs=_, .ip6addrs=_}.Arrange 970: 3
+peak size of OVN_Southbound.DeltaMinus_Port_Binding.Arrange 4551: 0
+peak size of rule (local).Arrange 733: 3
+peak size of rule (local).Arrange 3530: 1
+peak size of OVN_Southbound.UUIDMap_Datapath_Binding{.uuid_name=_, .id=std.Left{.l=_0}}.Arrange 1838: 1
+peak size of OVN_Southbound.Chassis{._uuid=_, .name=_0, .hostname=_, .encaps=_, .vtep_logical_switches=_, .nb_cfg=_, .external_ids=_}.Arrange 1717: 1
+peak size of rule (local).Arrange 4037: 1
+peak size of rule (local).Arrange 4320: 1
+peak size of rule (local).Arrange 2461: 1
+peak size of .Arrange 1141: 1
+peak size of .Arrange 2399: 1
+peak size of LogicalSwitchLocalnetPort{.ls=_0, .lsp=_}.Arrange 659: 1
+peak size of rule (local).Arrange 4049: 1
+peak size of group.Group 1854: 1
+peak size of .Arrange 2631: 25
+peak size of group.Arrange 565: 2
+peak size of rule (local).Arrange 4351: 4
+peak size of rule (local).Arrange 1529: 1
+peak size of group.Group 2992: 2
+peak size of rule (local).Arrange 3970: 3
+peak size of rule (local).Arrange 2974: 2
+peak size of LBVIP{.lb=_0, .vip=_}.Arrange 43: 1
+peak size of rule (local).Arrange 3872: 3
+peak size of .Arrange 588: 1
+peak size of group.Arrange 2514: 1
+peak size of .Arrange 1809: 3
+peak size of LogicalSwitchHasStatefulACL{.ls=_0, .has_stateful_acl=_}.Arrange 1481: 1
+peak size of group.Arrange 121: 2
+peak size of OVN_Northbound.Gateway_Chassis{._uuid=_0, .name=_, .chassis_name=_, .priority=_, .external_ids=_, .options=_}.Arrange 24: 1
+peak size of OVN_Northbound.Logical_Switch_Port{._uuid=_0, .name=_, .__type="localnet", .options=_, .parent_name=_, .tag_request=_, .tag=_, .addresses=_, .dynamic_addresses=_, .port_security=_, .up=_, .enabled=_, .dhcpv4_options=_, .dhcpv6_options=_, .external_ids=_}.Arrange 487: 1
+peak size of rule (local).Arrange 4148: 1
+peak size of .Arrange 4564: 1
+peak size of rule (local).Arrange 3286: 1
+peak size of rule (local).Arrange 2118: 3
+peak size of rule (local).Arrange 634: 2
+peak size of OVN_Southbound.UUIDMap_Gateway_Chassis{.uuid_name=_0, .id=_}.Arrange 2250: 3
+peak size of rule (local).Arrange 3621: 3
+peak size of rule (local).Arrange 474: 1
+peak size of rule (local).Arrange 3860: 3
+peak size of group.Arrange 977: 5
+peak size of rule (local).Arrange 3628: 1
+peak size of group.Group 2266: 9
+peak size of rule (local).Arrange 204: 4
+peak size of OVN_Southbound.DeltaPlus_MAC_Binding.Arrange 2376: 0
+peak size of rule (local).Arrange 1845: 1
+peak size of rule (local).Arrange 107: 2
+peak size of rule (local).Arrange 1055: 3
+peak size of rule (local).Arrange 1014: 1
+peak size of rule (local).Arrange 285: 1
+peak size of .Arrange 4976: 1
+peak size of group.Arrange 1852: 1
+peak size of rule (local).Arrange 4025: 1
+peak size of rule (local).Arrange 368: 1
+peak size of rule (local).Arrange 3366: 1
+peak size of group.Group 123: 2
+peak size of rule (local).Arrange 2211: 2
+peak size of group.Group 2892: 3
+peak size of rule (local).Arrange 4212: 3
+peak size of rule (local).Arrange 3958: 3
+peak size of .Arrange 4858: 1
+peak size of .Arrange 1813: 2
+peak size of OVN_Northbound.NAT{._uuid=_0, .external_ip=_, .external_mac=_, .logical_ip=_, .logical_port=_, .__type=_, .external_ids=_}.Arrange 1094: 2
+peak size of LogicalSwitchHasStatefulACL{.ls=_0, .has_stateful_acl=true}.Arrange 1485: 1
+peak size of rule (local).Arrange 3908: 3
+peak size of rule (local).Arrange 4129: 2
+peak size of group.Group 4831: 1
+peak size of .Arrange 4714: 4
+peak size of rule (local).Arrange 1987: 1
+peak size of rule (local).Arrange 3687: 1
+peak size of LogicalSwitchQoS{.ls=_0, .qos_rule=_}.Arrange 406: 1
+peak size of rule (local).Arrange 3554: 1
+peak size of LSPortAddresses{.lsport=_0, .addrs=_}.Arrange 518: 3
+peak size of rule (local).Arrange 3602: 3
+peak size of LogicalRouterHasRedirectPort{.lr=_0, .has_redirect_port=true}.Arrange 153: 2
+peak size of .Arrange 2225: 2
+peak size of rule (local).Arrange 4200: 3
+peak size of OVN_Southbound.UUIDMap_Port_Binding{.uuid_name=_0, .id=std.Left{.l=_}}.Arrange 2849: 1
+peak size of .Arrange 2179: 2
+peak size of rule (local).Arrange 3262: 2
+peak size of rule (local).Arrange 3805: 3
+peak size of OVN_Southbound.DeltaPlus_DHCP_Options.Arrange 2686: 25
+peak size of rule (local).Arrange 4592: 9
+peak size of rule (local).Arrange 3210: 9
+peak size of rule (local).Arrange 1406: 3
+peak size of OVN_Southbound.OutProxy_Port_Binding{.uuid_name=_, .logical_port=_0, .__type=_, .gateway_chassis=_, .options=_, .datapath=_, .tunnel_key=_, .parent_port=_, .tag=_, .mac=_, .nat_addresses=_, .external_ids=_}.Arrange 3229: 9
+peak size of .Arrange 171: 2
+peak size of .Arrange 2475: 1
+peak size of rule (local).Arrange 1027: 1
+peak size of group.Arrange 2890: 8
+peak size of rule (local).Arrange 716: 3
+peak size of .Arrange 584: 3
+peak size of rule (local).Arrange 1434: 1
+peak size of .Arrange 4790: 4
+peak size of rule (local).Arrange 614: 3
+peak size of OVN_Southbound.DeltaMinus_Datapath_Binding.Arrange 2077: 1
+peak size of rule (local).Arrange 898: 2
+peak size of OVN_Northbound.ACL{._uuid=_0, .name=_, .priority=_, .direction=_, .__match=_, .action=_, .log=_, .severity=_, .meter=_, .external_ids=_}.Arrange 7: 1
+peak size of group.Arrange 767: 3
+peak size of LSHasDNSRecords{.ls=_0}.Arrange 297: 1
+peak size of rule (local).Arrange 454: 1
+peak size of OVN_Southbound.DeltaPlus_RBAC_Permission.Arrange 4769: 4
+peak size of .Arrange 4560: 9
+peak size of rule (local).Arrange 931: 4
+peak size of OVN_Southbound.DeltaPlus_SB_Global.Arrange 5001: 1
+peak size of rule (local).Arrange 4363: 4
+peak size of LSPortPSEthAddresses{.lsport=_0, .addrs=_}.Arrange 609: 4
+peak size of rule (local).Arrange 1516: 1
+peak size of group.Group 1959: 1
+peak size of rule (local).Arrange 2289: 2
+peak size of rule (local).Arrange 217: 4
+peak size of group.Arrange 1957: 2
+peak size of rule (local).Arrange 2274: 9
+peak size of rule (local).Arrange 4117: 3
+peak size of PortStaticAddresses{.lsport=_0, .ip4addrs=_, .ip6addrs=_}.Arrange 994: 3
+peak size of .Arrange 4946: 1
+peak size of OVN_Southbound.DeltaPlus_Datapath_Binding.Arrange 2111: 2
+peak size of .Arrange 2355: 2
+peak size of rule (local).Arrange 1975: 1
+peak size of rule (local).Arrange 3274: 2
+peak size of NotYetAllocatedPortTunKeys{.datapath=_0, .all_logical_ids=_}.Arrange 2907: 3
+peak size of rule (local).Arrange 302: 1
+peak size of LogicalRouterNAT{.lr=_0, .nat=_}.Arrange 1113: 2
+peak size of OVN_Southbound.Datapath_Binding{._uuid=_, .tunnel_key=_, .external_ids=_0}.Arrange 1764: 2
+peak size of rule (local).Arrange 3896: 3
+peak size of LSPortIPv4Address{.lsport=_0, .ea_s=_, .addr=_}.Arrange 532: 2
+peak size of rule (local).Arrange 1592: 1
+peak size of rule (local).Arrange 2257: 9
+peak size of group.Group 567: 1
+peak size of LSPortIPv6Address{.lsport=_0, .ea_s=_, .addr=_}.Arrange 546: 1
+peak size of LogicalSwitchLBVIP{.ls=_0, .vip=_}.Arrange 380: 1
+peak size of .Arrange 4492: 150
+peak size of OVN_Northbound.Logical_Router_Port{._uuid=_, .name=_0, .gateway_chassis=_, .options=_, .networks=_, .mac=_, .peer=_, .enabled=_, .ipv6_ra_configs=_, .external_ids=_}.Arrange 102: 4
+peak size of rule (local).Arrange 1034: 1
+peak size of .Arrange 2056: 3
+peak size of .Arrange 1906: 1
+peak size of rule (local).Arrange 664: 3
+peak size of rule (local).Arrange 3848: 3
+peak size of group.Arrange 953: 3
+peak size of rule (local).Arrange 4013: 1
+peak size of .Arrange 332: 1
+peak size of rule (local).Arrange 879: 1
+peak size of OVN_Southbound.DeltaMinus_MAC_Binding.Arrange 2342: 1
+peak size of rule (local).Arrange 2507: 1
+peak size of OVN_Northbound.Logical_Router{._uuid=_0, .name=_, .ports=_, .static_routes=_, .enabled=_, .nat=_, .load_balancer=_, .options=_, .external_ids=_}.Arrange 48: 2
+peak size of .Arrange 2321: 1
+peak size of rule (local).Arrange 4822: 4
+peak size of rule (local).Arrange 2798: 9
+peak size of rule (local).Arrange 1566: 1
+peak size of rule (local).Arrange 905: 2
+peak size of rule (local).Arrange 2983: 5
+peak size of rule (local).Arrange 4181: 3
+peak size of .Arrange 167: 4
+peak size of rule (local).Arrange 461: 1
+peak size of rule (local).Arrange 912: 2
+peak size of OVN_Southbound.UUIDMap_RBAC_Permission{.uuid_name=_0, .id=_}.Arrange 4815: 5
+peak size of rule (local).Arrange 3946: 3
+peak size of rule (local).Arrange 4776: 4
+peak size of rule (local).Arrange 760: 3
+peak size of OVN_Southbound.DeltaPlus_DHCPv6_Options.Arrange 2755: 4
+peak size of rule (local).Arrange 2037: 3
+peak size of rule (local).Arrange 3590: 1
+peak size of .Arrange 2661: 25
+peak size of rule (local).Arrange 2600: 1
+peak size of rule (local).Arrange 1101: 2
+peak size of rule (local).Arrange 3836: 3
+peak size of OVN_Southbound.DeltaPlus_Port_Binding.Arrange 4585: 8
+peak size of group.Group 742: 1
+peak size of rule (local).Arrange 3781: 1
+peak size of group.Group 979: 3
+peak size of rule (local).Arrange 4920: 1
+peak size of rule (local).Arrange 3609: 1
+peak size of rule (local).Arrange 197: 4
+peak size of QueueIDAllocation{.port=_0, .qids=_}.Arrange 3205: 9
+peak size of OVN_Northbound.Logical_Switch_Port{._uuid=_0, .name=_, .__type=_, .options=_, .parent_name=_, .tag_request=_, .tag=_, .addresses=_, .dynamic_addresses=_, .port_security=_, .up=_, .enabled=_, .dhcpv4_options=_, .dhcpv6_options=_, .external_ids=_}.Arrange 495: 3
+peak size of OVN_Northbound.ACL{._uuid=_0, .name=_, .priority=_, .direction=_, .__match=_, .action="allow-related", .log=_, .severity=_, .meter=_, .external_ids=_}.Arrange 3: 1
+peak size of rule (local).Arrange 3793: 1
+peak size of .Arrange 4744: 4
+peak size of LogicalSwitchRouterPort{.ls=_0, .lrp=_}.Arrange 728: 2
+peak size of group.Group 1775: 1
+peak size of LogicalSwitchLB{.ls=_0, .lb=_}.Arrange 363: 1
+peak size of group.Arrange 1773: 2
+peak size of group.Arrange 309: 1
+peak size of rule (local).Arrange 3680: 1
+peak size of QoSAction{.qos=_0, .key_action=_, .value_action=_}.Arrange 1619: 1
+peak size of .Arrange 4530: 7
+peak size of .Arrange 2005: 1
+peak size of .Arrange 1456: 1
+peak size of .Arrange 2568: 1
+peak size of rule (local).Arrange 3217: 9
+peak size of OVN_Southbound.UUIDMap_Port_Binding{.uuid_name=_0, .id=_}.Arrange 2845: 10
+peak size of OVN_Northbound.DNS{._uuid=_0, .records=_, .external_ids=_}.Arrange 19: 1
+peak size of LogicalSwitchACL{.ls=_0, .acl=_}.Arrange 1429: 1
+peak size of rule (local).Arrange 3934: 3
+peak size of .Arrange 4888: 1
+peak size of .Arrange 2538: 1
+peak size of OVN_Southbound.UUIDMap_Meter_Band{.uuid_name=_0, .id=_}.Arrange 2500: 2
+peak size of rule (local).Arrange 1553: 1
 
 Clearing Datapath_Binding
 OVN_Southbound.DeltaPlus_Datapath_Binding{"5f55a7b2-6c50-2e96-954e-4c7113d2444c",1,std_Map { x: {"logical-router": "5f55a7b2-6c50-2e96-954e-4c7113d2444c", "name": "lr2"} }}

@@ -171,6 +171,18 @@ pub fn ovn_ip_parse_masked(s: &arcval::DDString) -> std_Either<arcval::DDString,
     }
 }
 
+pub fn ovn_ip_parse(s: &arcval::DDString) -> std_Option<ovn_ovs_be32>
+{
+    unsafe {
+        let mut ip: ovn_ovs_be32 = 0;
+        if (ip_parse(ddstring2cstr(s).as_ptr(), &mut ip as *mut ovn_ovs_be32)) {
+            std_Option::std_Some{x:ip}
+        } else {
+            std_Option::std_None
+        }
+    }
+}
+
 pub fn ovn_is_dynamic_lsp_address(address: &arcval::DDString) -> bool {
     unsafe {
         is_dynamic_lsp_address(ddstring2cstr(address).as_ptr())
@@ -439,6 +451,7 @@ extern "C" {
     fn ipv6_addr_bitxor(a: *const ovn_in6_addr, b: *const ovn_in6_addr) -> ovn_in6_addr;
     fn ipv6_addr_bitand(a: *const ovn_in6_addr, b: *const ovn_in6_addr) -> ovn_in6_addr;
     fn ip_parse_masked(s: *const raw::c_char, ip: *mut ovn_ovs_be32, mask: *mut ovn_ovs_be32) -> *mut raw::c_char;
+    fn ip_parse(s: *const raw::c_char, ip: *mut ovn_ovs_be32) -> bool;
     fn eth_addr_from_string(s: *const raw::c_char, ea: *mut ovn_eth_addr) -> bool;
     // include/openvswitch/json.h
     fn json_string_escape(str: *const raw::c_char, out: *mut ovs_ds);
