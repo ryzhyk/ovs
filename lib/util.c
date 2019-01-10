@@ -1288,29 +1288,6 @@ raw_clz64(uint64_t n)
 }
 #endif
 
-#if NEED_COUNT_1BITS_8
-#define INIT1(X)                                \
-    ((((X) & (1 << 0)) != 0) +                  \
-     (((X) & (1 << 1)) != 0) +                  \
-     (((X) & (1 << 2)) != 0) +                  \
-     (((X) & (1 << 3)) != 0) +                  \
-     (((X) & (1 << 4)) != 0) +                  \
-     (((X) & (1 << 5)) != 0) +                  \
-     (((X) & (1 << 6)) != 0) +                  \
-     (((X) & (1 << 7)) != 0))
-#define INIT2(X)   INIT1(X),  INIT1((X) +  1)
-#define INIT4(X)   INIT2(X),  INIT2((X) +  2)
-#define INIT8(X)   INIT4(X),  INIT4((X) +  4)
-#define INIT16(X)  INIT8(X),  INIT8((X) +  8)
-#define INIT32(X) INIT16(X), INIT16((X) + 16)
-#define INIT64(X) INIT32(X), INIT32((X) + 32)
-
-const uint8_t count_1bits_8[256] = {
-    INIT64(0), INIT64(64), INIT64(128), INIT64(192)
-};
-#endif
-
-
 /* unsigned int count_1bits(uint64_t x):
  *
  * Returns the number of 1-bits in 'x', between 0 and 64 inclusive. */
@@ -1341,8 +1318,26 @@ count_1bits_32__(uint32_t x)
     return __builtin_popcount(x);
 }
 #else
-#define NEED_COUNT_1BITS_8 1
-extern const uint8_t count_1bits_8[256];
+#define INIT1(X)                                \
+    ((((X) & (1 << 0)) != 0) +                  \
+     (((X) & (1 << 1)) != 0) +                  \
+     (((X) & (1 << 2)) != 0) +                  \
+     (((X) & (1 << 3)) != 0) +                  \
+     (((X) & (1 << 4)) != 0) +                  \
+     (((X) & (1 << 5)) != 0) +                  \
+     (((X) & (1 << 6)) != 0) +                  \
+     (((X) & (1 << 7)) != 0))
+#define INIT2(X)   INIT1(X),  INIT1((X) +  1)
+#define INIT4(X)   INIT2(X),  INIT2((X) +  2)
+#define INIT8(X)   INIT4(X),  INIT4((X) +  4)
+#define INIT16(X)  INIT8(X),  INIT8((X) +  8)
+#define INIT32(X) INIT16(X), INIT16((X) + 16)
+#define INIT64(X) INIT32(X), INIT32((X) + 32)
+
+const uint8_t count_1bits_8[256] = {
+    INIT64(0), INIT64(64), INIT64(128), INIT64(192)
+};
+
 static inline unsigned int
 count_1bits_32__(uint32_t x)
 {
