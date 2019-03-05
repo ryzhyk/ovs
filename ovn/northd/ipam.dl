@@ -43,7 +43,7 @@ SwitchIPv4ReservedAddress(.lswitch = ls._uuid,
     var exclude_ips = {
         var exclude_ips = set_singleton(start_ipv4);
         match (map_get(ls.other_config, "exclude_ips")) {
-            None -> set_empty(): Set<bit<32>>,
+            None -> exclude_ips,
             Some{exclude_ip_list} -> match (parse_ip_list(exclude_ip_list)) {
                 Left{err} -> {
                     warn("logical switch ${uuid2str(ls._uuid)}: bad exclude_ips (${err})");
