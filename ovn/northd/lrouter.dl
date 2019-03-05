@@ -143,10 +143,10 @@ RouterLBVIP(router, lb, vip) :-
 /* Router-to-router logical port connections */
 relation RouterRouterPeer(rport1: uuid, rport2: uuid, rport2_name: string)
 
-RouterRouterPeer(rport1, rport2, rport2_name) :-
+RouterRouterPeer(rport1, rport2, peer_name) :-
     nb.Logical_Router_Port(._uuid = rport1, .peer = peer),
     Some{var peer_name} = set_nth(peer, 0),
-    nb.Logical_Router_Port(._uuid = rport2, .name = rport2_name).
+    nb.Logical_Router_Port(._uuid = rport2, .name = peer_name).
 
 /* Router port can peer with anothe router port, a switch port or have
  * no peer.
