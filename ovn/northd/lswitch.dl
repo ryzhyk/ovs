@@ -265,10 +265,12 @@ relation &SwitchPort(
     var static_addresses = {
         var static_addresses: Vec<lport_addresses> = vec_empty();
         for (addr in lsp.addresses) {
-            match (extract_lsp_addresses(addr)) {
-                None -> (),
-                Some{lport_addr} -> vec_push(static_addresses, lport_addr)
-            }
+            if (not is_dynamic_lsp_address(addr)) {
+                match (extract_lsp_addresses(addr)) {
+                    None -> (),
+                    Some{lport_addr} -> vec_push(static_addresses, lport_addr)
+                }
+            } else ()
         };
         static_addresses
     },
