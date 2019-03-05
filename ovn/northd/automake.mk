@@ -25,8 +25,9 @@ ovn_northd_ovn_northd_ddlog_LDADD = \
 	ovn/northd/ovn_northd_ddlog/target/release/libovn_northd_ddlog.la
 
 ovn/northd/OVN_Northbound.dl: ovn/ovn-nb.ovsschema
-	ovsdb2ddlog -f ovn/ovn-nb.ovsschema  	\
-				-o Logical_Switch_Port		\
+	ovsdb2ddlog -f ovn/ovn-nb.ovsschema         \
+				-o Logical_Switch_Port          \
+				-k Logical_Switch_Port.name     \
 				> $@
 
 ovn/northd/OVN_Southbound.dl: ovn/ovn-sb.ovsschema
