@@ -143,6 +143,46 @@ struct northd_ctx {
     struct json *request_id;         /* JSON ID for request awaiting reply. */
 };
 
+
+static bool
+debug_dump_callback(uintptr_t arg OVS_UNUSED, const ddlog_record *rec)
+{
+    char *str = ddlog_dump_record(rec);
+    VLOG_WARN("%s", str);
+    ddlog_string_free(str);
+
+    return true;
+}
+
+/* Debug-dump DDlog table.
+ *
+ * `table` must be declared as `output relation` in DDlog. Typically, to use
+ * this function, one would add the `output` qualifier to the table of interest
+ * and re-compile the DDlog program. */
+OVS_UNUSED static void
+ddlog_table_debug_dump(ddlog_prog ddlog, const char *table)
+{
+    table_id tid = ddlog_get_table_id(table);
+    if (tid == -1) {
+        VLOG_WARN("Unknown output table %s", table);
+        return;
+    }
+    VLOG_WARN("Dump %s", table);
+    ddlog_dump_table(ddlog, tid, debug_dump_callback, 0);
+}
+
+/* Debug-dump all tables of interest. */
+static void
+ddlog_debug_dump(ddlog_prog ddlog OVS_UNUSED)
+{
+#if 0
+    ddlog_table_debug_dump(ddlog, "OVN_Southbound.Out_Port_Binding");
+    ddlog_table_debug_dump(ddlog, "helpers.SwitchRouterPeer");
+    ddlog_table_debug_dump(ddlog, "lrouter.RouterPortPeer");
+    ddlog_table_debug_dump(ddlog, "lrouter.RouterPort");
+#endif
+}
+
 static struct northd_ctx *
 northd_ctx_create(const char *server, const char *database, ddlog_prog ddlog)
 {
@@ -273,6 +313,8 @@ northd_db_handle_update(struct northd_db *db,
     } else {
         VLOG_WARN("xxx Unknown db");
     }
+
+    ddlog_debug_dump(db->ctx->ddlog);
 }
 
 static void
