@@ -334,7 +334,7 @@ relation RouterStaticRoute(
     output_port : Ref<RouterPort>,
     lrp_addr_s  : string)
 
-/* Step 1: computer router-route pairs */
+/* Step 1: compute router-route pairs */
 relation RouterStaticRoute_(
     router  : Ref<Router>,
     route   : Ref<StaticRoute>)
