@@ -3720,7 +3720,7 @@ for (&Router(.dpname = dpname,
         * ip address being external IP address for IP routing,
         * we can do it here, saving a future re-circulation. */
         Flow(.logical_datapath = dpname,
-             .stage         = router_stage(IN, SNAT),
+             .stage            = router_stage(IN, DNAT),
              .priority         = 50,
              .__match          = "ip",
              .actions          = "flags.loopback = 1; ct_dnat;",
