@@ -616,7 +616,7 @@ nb_ddlog_handle_update(struct northd_ctx *ctx,
     struct ds ds = DS_EMPTY_INITIALIZER;
     ds_put_cstr(&ds, "[\"OVN_Southbound\",");
 
-    //ddlog_table_update(&ds, ctx->ddlog, "SB_Global");
+    ddlog_table_update(&ds, ctx->ddlog, "OVN_Southbound", "SB_Global");
     ddlog_table_update(&ds, ctx->ddlog, "OVN_Southbound", "Datapath_Binding");
     ddlog_table_update(&ds, ctx->ddlog, "OVN_Southbound", "Port_Binding");
     ddlog_table_update(&ds, ctx->ddlog, "OVN_Southbound", "Logical_Flow");
@@ -681,6 +681,7 @@ sb_ddlog_handle_update(struct northd_ctx *ctx,
 
     ddlog_table_update(&ds, ctx->ddlog, "OVN_Northbound",
                        "Logical_Switch_Port");
+    ddlog_table_update(&ds, ctx->ddlog, "OVN_Northbound", "NB_Global");
 
     ds_chomp(&ds, ',');
     ds_put_cstr(&ds, "]");
