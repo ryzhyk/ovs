@@ -28,6 +28,13 @@ ovn/northd/OVN_Northbound.dl: ovn/ovn-nb.ovsschema
 	ovsdb2ddlog -f ovn/ovn-nb.ovsschema         \
 				-o Logical_Switch_Port          \
 				-k Logical_Switch_Port.name     \
+				-o NB_Global                    \
+				--ro NB_Global.nb_cfg           \
+				--ro NB_Global.external_ids     \
+				--ro NB_Global.connections      \
+				--ro NB_Global.ssl              \
+				--ro NB_Global.options          \
+				-k NB_Global.ipsec              \
 				> $@
 
 ovn/northd/OVN_Southbound.dl: ovn/ovn-sb.ovsschema
