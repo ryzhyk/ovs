@@ -1,4 +1,5 @@
 import OVN_Northbound as nb
+import OVN_Southbound as sb
 import ovsdb
 import ovn
 import lrouter
@@ -217,13 +218,33 @@ relation &SwitchACL(sw: Ref<Switch>,
     sw in &Switch(.ls = nb.Logical_Switch{._uuid = sw_uuid}),
     acl in &ACLRef[nb.ACL{._uuid = acl_uuid}].
 
-/* SwitchPort relation collects all attributes of a logical switch po   rt
+relation SwitchPortUp(lsp: uuid, up: bool)
+
+SwitchPortUp(lsp, up) :-
+    nb.Logical_Switch_Port(._uuid = lsp, .name = lsp_name, .__type = __type),
+    sb.Port_Binding(.logical_port = lsp_name, .chassis = chassis),
+    var up =
+        if (__type == "router") {
+            true
+        } else if (is_none(set_nth(chassis, 0))) {
+            false
+        } else {
+            true
+        }.
+
+SwitchPortUp(lsp, up) :-
+    nb.Logical_Switch_Port(._uuid = lsp, .name = lsp_name, .__type = __type),
+    not sb.Port_Binding(.logical_port = lsp_name),
+    var up = __type == "router".
+
+/* SwitchPort relation collects all attributes of a logical switch port
  * - `peer` - peer router port, if any
  * - `static_dynamic_mac` - port has a "dynamic" address that contains a static MAC,
  *    e.g., "80:fa:5b:06:72:b7 dynamic"
  * - `needs_dynamic_ipv4address` - port requires a dynamically allocated IPv4 address
  * - `needs_dynamic_macaddress`  - port requires a dynamically allocated MAC address
  * - `needs_dynamic_tag`         - port requires a dynamically allocated tag
+ * - `up`                        - true if the port is bound to a chassis or has type ""
  */
 relation &SwitchPort(
     lsp:                        nb.Logical_Switch_Port,
@@ -239,7 +260,8 @@ relation &SwitchPort(
     needs_dynamic_ipv4address:  bool,
     needs_dynamic_macaddress:   bool,
     needs_dynamic_ipv6address:  bool,
-    needs_dynamic_tag:          bool
+    needs_dynamic_tag:          bool,
+    up:                         bool
 )
 
 &SwitchPort(.lsp                        = lsp,
@@ -255,17 +277,19 @@ relation &SwitchPort(
             .needs_dynamic_ipv4address  = needs_dynamic_ipv4address,
             .needs_dynamic_macaddress   = needs_dynamic_macaddress,
             .needs_dynamic_ipv6address  = needs_dynamic_ipv6address,
-            .needs_dynamic_tag          = needs_dynamic_tag) :-
+            .needs_dynamic_tag          = needs_dynamic_tag,
+            .up                         = up) :-
     nb.Logical_Switch_Port[lsp],
     LogicalPortSwitch(lsp._uuid, lswitch_uuid),
-    sw in &Switch(.ls = nb.Logical_Switch{._uuid = lswitch_uuid},
+    sw in &Switch(.ls = nb.Logical_Switch{._uuid = lswitch_uuid, .other_config = other_config},
                   .subnet = subnet,
                   .ipv6_prefix = ipv6_prefix),
     SwitchRouterPeerRef(lsp._uuid, peer),
+    SwitchPortUp(lsp._uuid, up),
     var static_addresses = {
         var static_addresses: Vec<lport_addresses> = vec_empty();
         for (addr in lsp.addresses) {
-            if (not is_dynamic_lsp_address(addr)) {
+            if ((addr != "router") and (not is_dynamic_lsp_address(addr))) {
                 match (extract_lsp_addresses(addr)) {
                     None -> (),
                     Some{lport_addr} -> vec_push(static_addresses, lport_addr)
@@ -317,7 +341,9 @@ relation &SwitchPort(
         has_dyn_lsp_addr
     },
     var needs_dynamic_ipv4address = has_dyn_lsp_addr and is_none(peer) and is_some(subnet),
-    var needs_dynamic_macaddress = has_dyn_lsp_addr and is_none(peer) and is_none(static_dynamic_mac),
+    var needs_dynamic_macaddress = has_dyn_lsp_addr and is_none(peer) and is_none(static_dynamic_mac) and
+                                   (is_some(subnet) or is_some(ipv6_prefix) or
+                                    map_get(other_config, "mac_only") == Some{"true"}),
     var needs_dynamic_ipv6address = has_dyn_lsp_addr and is_none(peer) and is_some(ipv6_prefix),
     var parent_name: Option<string> = match (set_nth(lsp.parent_name, 0)) {
         None -> None,
@@ -352,6 +378,28 @@ SwitchPortAddresses(port, addrs) :- SwitchPortStaticAddresses(port, addrs).
 
 SwitchPortAddresses(port, dynamic_address) :-
     SwitchPortNewDynamicAddress(port, Some{dynamic_address}).
+
+/* "router" is a special Logical_Switch_Port address value that indicates that the Ethernet, IPv4, and IPv6
+ * this port should be obtained from the connected logical router port, as specified by router-port in
+ * options.
+ *
+ * The resulting addresses are used to populate the logical switch’s destination lookup, and also for the
+ * logical switch to generate ARP and ND replies.
+ *
+ * If the connected logical router port has a redirect-chassis specified and  the  logical  router  has  rules
+ * specified in nat with external_mac, then those addresses are also used to populate the switch’s destination
+ * lookup. */
+SwitchPortAddresses(port, addrs) :-
+    port in &SwitchPort(.lsp = lsp, .peer = Some{&rport}),
+    Some{var addrs} = {
+        var opt_addrs: Option<lport_addresses> = None;
+        for (addr in lsp.addresses) {
+            if (addr == "router") {
+                opt_addrs = Some{rport.networks}
+            } else ()
+        };
+        opt_addrs
+    }.
 
 /* All static and dynamic IPv4 addresses associated with a port */
 relation SwitchPortIPv4Address(port: Ref<SwitchPort>,
