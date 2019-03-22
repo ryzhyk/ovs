@@ -129,7 +129,6 @@ struct northd_ctx {
     struct northd_db data;
 
     ddlog_prog ddlog;
-    struct json *ddlog_ops;          /* Outstanding ops for other side. */
 
     /* Session state.
      *
@@ -268,7 +267,7 @@ northd_send_request(struct northd_ctx *ctx, struct jsonrpc_msg *request)
     json_destroy(ctx->request_id);
     ctx->request_id = json_clone(request->id);
     if (ctx->session) {
-        jsonrpc_session_send(ctx->session, request);
+        jsonrpc_session_send_block(ctx->session, request);
     }
 }
 
@@ -286,30 +285,24 @@ static void
 northd_send_transact(struct northd_ctx *ctx, struct json *ddlog_ops)
 {
     /* xxx Need to store txn id */
-    northd_send_request(ctx, jsonrpc_create_request(
-                             "transact", ddlog_ops,
-                             NULL));
+    northd_send_request(ctx, jsonrpc_create_request("transact", ddlog_ops,
+                                                    NULL));
 }
 
-static struct json *nb_ddlog_handle_update(struct northd_ctx *,
-                                           const struct json *);
-static struct json *sb_ddlog_handle_update(struct northd_ctx *,
-                                           const struct json *);
+static void ddlog_handle_update(struct northd_ctx *, bool northbound,
+                                const struct json *);
+static struct json * get_nb_ops(struct northd_ctx *);
+static struct json * get_sb_ops(struct northd_ctx *);
 
 static void
 northd_db_handle_update(struct northd_db *db,
                         const struct json *table_updates)
 {
-    if (db->ctx->ddlog_ops) {
-        json_destroy(db->ctx->ddlog_ops);
-        db->ctx->ddlog_ops = NULL;
-    }
-
     /* xxx This string comparison isn't very efficient. */
     if (!strcmp(db->name, "OVN_Northbound")) {
-        db->ctx->ddlog_ops = nb_ddlog_handle_update(db->ctx, table_updates);
+        ddlog_handle_update(db->ctx, true, table_updates);
     } else if (!strcmp(db->name, "OVN_Southbound")) {
-        db->ctx->ddlog_ops = sb_ddlog_handle_update(db->ctx, table_updates);
+        ddlog_handle_update(db->ctx, false, table_updates);
     } else {
         VLOG_WARN("xxx Unknown db");
     }
@@ -496,10 +489,9 @@ northd_process_msg(struct northd_ctx *ctx, struct jsonrpc_msg *msg)
 
 /* Processes a batch of messages from the database server on 'ctx'. */
 static void
-northd_run(struct northd_ctx *ctx, struct json *ddlog_ops)
+northd_run(struct northd_ctx *ctx, bool run_deltas)
 {
-    /* xxx Ick, messy */
-    ctx->ddlog_ops = NULL;
+    VLOG_WARN("xxx ========= northd_run: %s", ctx->data.name);
 
     if (!ctx->session) {
 #if 0
@@ -513,14 +505,19 @@ northd_run(struct northd_ctx *ctx, struct json *ddlog_ops)
     ovs_assert(!ctx->data.txn);
 #endif
 
+#if 0
     if (ctx->state == S_MONITORING && ddlog_ops) {
         northd_send_transact(ctx, ddlog_ops);
     }
+#endif
 
     jsonrpc_session_run(ctx->session);
-    for (int i = 0; jsonrpc_session_is_connected(ctx->session) && i < 50; i++) {
+    for (int i = 0; jsonrpc_session_is_connected(ctx->session) && i < 50;
+         i++) {
         struct jsonrpc_msg *msg;
         unsigned int seqno;
+
+        VLOG_WARN("xxx northd_run: iter %d", i);
 
         seqno = jsonrpc_session_get_seqno(ctx->session);
         if (ctx->state_seqno != seqno) {
@@ -546,8 +543,28 @@ northd_run(struct northd_ctx *ctx, struct json *ddlog_ops)
         }
         northd_process_msg(ctx, msg);
         jsonrpc_msg_destroy(msg);
+        poll_immediate_wake();
     }
     /* xxx Post-processing? */
+    /* xxx This string comparison isn't very efficient. */
+
+    if (run_deltas && !ctx->request_id) {
+        if (!strcmp(ctx->data.name, "OVN_Northbound")) {
+            struct json *ops = get_nb_ops(ctx);
+            if (ops) {
+                northd_send_transact(ctx->data.ctx, ops);
+                poll_immediate_wake();
+            }
+        } else if (!strcmp(ctx->data.name, "OVN_Southbound")) {
+            struct json *ops = get_sb_ops(ctx);
+            if (ops) {
+                northd_send_transact(ctx->data.ctx, ops);
+                poll_immediate_wake();
+            }
+        } else {
+            VLOG_WARN("xxx Unknown db");
+        }
+    }
 }
 
 /* Arranges for poll_block() to wake up when northd_run() has something to
@@ -588,33 +605,9 @@ ddlog_table_update(struct ds *ds, ddlog_prog ddlog,
 }
 
 static struct json *
-nb_ddlog_handle_update(struct northd_ctx *ctx,
-                       const struct json *table_updates)
+get_sb_ops(struct northd_ctx *ctx)
 {
-    if (!table_updates) {
-        return NULL;
-    }
-
-    if (ddlog_transaction_start(ctx->ddlog)) {
-        VLOG_ERR("xxx Couldn't start transaction");
-        return NULL;
-    }
-
-    char *updates_s = json_to_string(table_updates, 0);
-    if (ddlog_apply_ovsdb_updates(ctx->ddlog, "OVN_Northbound.", updates_s)) {
-        VLOG_ERR("xxx Couldn't add update");
-        free(updates_s);
-        goto error;
-    }
-    free(updates_s);
-
-    if (ddlog_transaction_commit(ctx->ddlog)) {
-        VLOG_ERR("xxx Couldn't commit transaction");
-        goto error;
-    }
-
     struct ds ds = DS_EMPTY_INITIALIZER;
-    ds_put_cstr(&ds, "[\"OVN_Southbound\",");
 
     ddlog_table_update(&ds, ctx->ddlog, "OVN_Southbound", "SB_Global");
     ddlog_table_update(&ds, ctx->ddlog, "OVN_Southbound", "Datapath_Binding");
@@ -633,38 +626,66 @@ nb_ddlog_handle_update(struct northd_ctx *ctx,
     ddlog_table_update(&ds, ctx->ddlog, "OVN_Southbound", "RBAC_Role");
     ddlog_table_update(&ds, ctx->ddlog, "OVN_Southbound", "RBAC_Permission");
 
-
     ds_chomp(&ds, ',');
-    ds_put_cstr(&ds, "]");
 
-    /* xxx Return null if there were no updates. */
+    if (!ds.length) {
+        return NULL;
+    }
+    char *ops_s;
+    ops_s = xasprintf("[\"OVN_Southbound\",%s]", ds_steal_cstr(&ds));
 
-    struct json *ops = json_from_string(ds_steal_cstr(&ds));
-    VLOG_WARN("xxx postops: %s", json_to_string(ops, 0));
+    struct json *ops = json_from_string(ops_s);
+    free(ops_s);
+    VLOG_WARN("xxx sb postops: %s", json_to_string(ops, JSSF_PRETTY));
 
     return ops;
-
-error:
-    ddlog_transaction_rollback(ctx->ddlog);
-    return NULL;
 }
 
-
 static struct json *
-sb_ddlog_handle_update(struct northd_ctx *ctx,
-                       const struct json *table_updates)
+get_nb_ops(struct northd_ctx *ctx)
+{
+
+    struct ds ds = DS_EMPTY_INITIALIZER;
+
+    ddlog_table_update(&ds, ctx->ddlog, "OVN_Northbound",
+                       "Logical_Switch_Port");
+    ddlog_table_update(&ds, ctx->ddlog, "OVN_Northbound", "NB_Global");
+
+    ds_chomp(&ds, ',');
+
+    if (!ds.length) {
+        return NULL;
+    }
+    char *ops_s;
+    ops_s = xasprintf("[\"OVN_Northbound\",%s]", ds_steal_cstr(&ds));
+
+    struct json *ops = json_from_string(ops_s);
+    free(ops_s);
+    VLOG_WARN("xxx nb postops: %s", json_to_string(ops, JSSF_PRETTY));
+
+    return ops;
+}
+
+static void
+ddlog_handle_update(struct northd_ctx *ctx, bool northbound,
+                    const struct json *table_updates)
 {
     if (!table_updates) {
-        return NULL;
+        return;
     }
 
     if (ddlog_transaction_start(ctx->ddlog)) {
         VLOG_ERR("xxx Couldn't start transaction");
-        return NULL;
+        return;
     }
 
+    VLOG_WARN("xxx %s update: %s", northbound ? "nb" : "sb",
+              json_to_string(table_updates, JSSF_PRETTY));
+
+    const char *prefix = northbound ? "OVN_Northbound." : "OVN_Southbound.";
+
     char *updates_s = json_to_string(table_updates, 0);
-    if (ddlog_apply_ovsdb_updates(ctx->ddlog, "OVN_Southbound.", updates_s)) {
+    if (ddlog_apply_ovsdb_updates(ctx->ddlog, prefix, updates_s)) {
         VLOG_ERR("xxx Couldn't add update");
         free(updates_s);
         goto error;
@@ -676,31 +697,15 @@ sb_ddlog_handle_update(struct northd_ctx *ctx,
         goto error;
     }
 
-    struct ds ds = DS_EMPTY_INITIALIZER;
-    ds_put_cstr(&ds, "[\"OVN_Northbound\",");
-
-    ddlog_table_update(&ds, ctx->ddlog, "OVN_Northbound",
-                       "Logical_Switch_Port");
-    ddlog_table_update(&ds, ctx->ddlog, "OVN_Northbound", "NB_Global");
-
-    ds_chomp(&ds, ',');
-    ds_put_cstr(&ds, "]");
-
-    /* xxx Return null if there were no updates. */
-
-    struct json *ops = json_from_string(ds_steal_cstr(&ds));
-    VLOG_WARN("xxx postops: %s", json_to_string(ops, JSSF_PRETTY));
-
-    return ops;
+    return;
 
 error:
     ddlog_transaction_rollback(ctx->ddlog);
-    return NULL;
 }
 
-/* Callback used by the ddlog engine to print error messages.  Note that this is
- * only used by the ddlog runtime, as opposed to the application code in
- * ovn_northd.dl, which uses the vlog facility directly.  */
+/* Callback used by the ddlog engine to print error messages.  Note that
+ * this is only used by the ddlog runtime, as opposed to the application
+ * code in ovn_northd.dl, which uses the vlog facility directly.  */
 static void
 ddlog_print_error(const char *msg)
 {
@@ -857,10 +862,13 @@ main(int argc, char *argv[])
         /* xxx Set up lock like in ovn-northd-c to ensure only a single
          * xxx ovn-northd instance is running. */
 
-        northd_run(nb_ctx, sb_ctx->ddlog_ops);
+        bool run_deltas = (nb_ctx->state == S_MONITORING &&
+                           sb_ctx->state == S_MONITORING);
+
+        northd_run(nb_ctx, run_deltas);
         northd_wait(nb_ctx);
 
-        northd_run(sb_ctx, nb_ctx->ddlog_ops);
+        northd_run(sb_ctx, run_deltas);
         northd_wait(sb_ctx);
 
         unixctl_server_run(unixctl);
@@ -868,6 +876,10 @@ main(int argc, char *argv[])
         if (exiting) {
             poll_immediate_wake();
         }
+
+        //if (nb_ctx->sb_ops || sb_ctx->nb_ops) {
+            //poll_immediate_wake();
+        //}
 
         poll_block();
         if (should_service_stop()) {
