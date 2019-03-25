@@ -72,6 +72,9 @@ struct gen_opts_map {
 
 #define DHCP_OPT_BOOTFILE DHCP_OPTION("bootfile_name", 67, "str")
 #define DHCP_OPT_WPAD DHCP_OPTION("wpad", 252, "str")
+#define DHCP_OPT_PATH_PREFIX DHCP_OPTION("path_prefix", 210, "str")
+#define DHCP_OPT_TFTP_SERVER_ADDRESS \
+    DHCP_OPTION("tftp_server_address", 150, "ipv4")
 
 static inline uint32_t
 gen_opt_hash(char *opt_name)
@@ -255,7 +258,8 @@ nd_ra_opts_destroy(struct hmap *nd_ra_opts)
 #define IPV6_ND_RA_REACHABLE_TIME                   0
 #define IPV6_ND_RA_RETRANSMIT_TIMER                 0
 
-#define IPV6_ND_RA_OPT_PREFIX_FLAGS                 0xc0
+#define IPV6_ND_RA_OPT_PREFIX_ON_LINK               0x80
+#define IPV6_ND_RA_OPT_PREFIX_AUTONOMOUS            0x40
 #define IPV6_ND_RA_OPT_PREFIX_VALID_LIFETIME        0xffffffff
 #define IPV6_ND_RA_OPT_PREFIX_PREFERRED_LIFETIME    0xffffffff
 
