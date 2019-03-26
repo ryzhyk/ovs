@@ -328,6 +328,10 @@ northd_db_handle_update(struct northd_db *db,
         VLOG_WARN("xxx Unknown db");
     }
 
+    /* This update may have implications for the other side, so
+     * immediately wake to check for more changes to be applied. */
+    poll_immediate_wake();
+
     ddlog_debug_dump(db->ctx->ddlog);
 }
 
