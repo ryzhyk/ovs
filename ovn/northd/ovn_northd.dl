@@ -4179,11 +4179,7 @@ for (&RouterPort[port@RouterPort{.lrp = lrp@nb.Logical_Router_Port{.peer = set_e
                 var prefix = "";
                 for (addr in networks.ipv6_addrs) {
                     if (not in6_is_lla(addr.network)) {
-                        /* Add the prefix option if the address mode is slaac or
-                         * dhcpv6_stateless. */
-                        if (address_mode != "dhcpv6_stateful") {
-                            prefix = prefix ++ ", prefix = ${addr.network_s}/${addr.plen}"
-                        } else ();
+                        prefix = prefix ++ ", prefix = ${addr.network_s}/${addr.plen}";
                         add_rs_response_flow = true
                     } else ()
                 };
