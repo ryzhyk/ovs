@@ -62,15 +62,15 @@ static const char *unixctl_path;
  * When a JSON-RPC session connects, sends a "monitor" request for
  * the Database table in the _Server database and transitions to the
  * S_SERVER_MONITOR_COND_REQUESTED state.  If the session drops and
- * reconnects, or if the IDL receives a "monitor_canceled" notification for a
- * table it is monitoring, the IDL starts over again in the same way. */
+ * reconnects, or if the FSM receives a "monitor_canceled" notification for a
+ * table it is monitoring, the FSM starts over again in the same way. */
 #define STATES                                                          \
     /* Waits for "get_schema" reply, then sends "monitor"               \
      * request whose details are informed by the schema, and            \
      * transitions to S_DATA_MONITOR_REQUESTED. */                      \
     STATE(S_DATA_SCHEMA_REQUESTED)                                      \
                                                                         \
-    /* Waits for "monitor" reply.  If successful, replaces the IDL      \
+    /* Waits for "monitor" reply.  If successful, replaces the          \
      * contents by the data carried in the reply and transitions to     \
      * S_MONITORING.  On failure, transitions to S_ERROR. */            \
     STATE(S_DATA_MONITOR_REQUESTED)                                     \
@@ -122,6 +122,12 @@ struct northd_db {
     struct json *monitor_id;
     struct json *schema;
     enum northd_monitoring monitoring;
+
+    /* Database locking. */
+    char *lock_name;            /* Name of lock we need, NULL if none. */
+    bool has_lock;              /* Has db server told us we have the lock? */
+    bool is_lock_contended;     /* Has db server told us we can't get lock? */
+    struct json *lock_request_id; /* JSON-RPC ID of in-flight lock request. */
 };
 
 struct northd_ctx {
@@ -142,6 +148,25 @@ struct northd_ctx {
     struct json *request_id;         /* JSON ID for request awaiting reply. */
 };
 
+static void northd_set_lock(struct northd_ctx *ctx, const char *lock_name);
+static bool northd_has_lock(const struct northd_ctx *ctx);
+//static bool northd_is_lock_contended(const struct northd_ctx *ctx);
+
+static struct jsonrpc_msg *northd_db_compose_lock_request(
+    struct northd_db *db);
+static struct jsonrpc_msg *northd_db_compose_unlock_request(
+    struct northd_db *db);
+
+static void northd_db_parse_lock_reply(struct northd_db *,
+                                       const struct json *result);
+static bool northd_db_parse_lock_notify(struct northd_db *,
+                                        const struct json *params,
+                                        bool new_has_lock);
+
+static void ddlog_handle_update(struct northd_ctx *, bool northbound,
+                                const struct json *);
+static struct json * get_nb_ops(struct northd_ctx *);
+static struct json * get_sb_ops(struct northd_ctx *);
 
 static bool
 debug_dump_callback(uintptr_t arg OVS_UNUSED, const ddlog_record *rec)
@@ -264,6 +289,7 @@ northd_retry_at(struct northd_ctx *ctx, const char *where)
 static void
 northd_send_request(struct northd_ctx *ctx, struct jsonrpc_msg *request)
 {
+    /* xxx We should add comments. */
     json_destroy(ctx->request_id);
     ctx->request_id = json_clone(request->id);
     if (ctx->session) {
@@ -288,11 +314,6 @@ northd_send_transact(struct northd_ctx *ctx, struct json *ddlog_ops)
     northd_send_request(ctx, jsonrpc_create_request("transact", ddlog_ops,
                                                     NULL));
 }
-
-static void ddlog_handle_update(struct northd_ctx *, bool northbound,
-                                const struct json *);
-static struct json * get_nb_ops(struct northd_ctx *);
-static struct json * get_sb_ops(struct northd_ctx *);
 
 static void
 northd_db_handle_update(struct northd_db *db,
@@ -363,6 +384,7 @@ northd_send_monitor_request(struct northd_ctx *ctx, struct northd_db *db)
 static void
 northd_restart_fsm(struct northd_ctx *ctx)
 {
+    /* xxx Free outstanding txn id? */
     northd_send_schema_request(ctx, &ctx->data);
     ctx->state = S_DATA_SCHEMA_REQUESTED;
 }
@@ -436,6 +458,188 @@ northd_db_handle_update_rpc(struct northd_db *db,
     }
     return false;
 }
+
+static struct jsonrpc_msg *
+northd_db_set_lock(struct northd_db *db, const char *lock_name)
+{
+    /* xxx Getting to build. */
+    //ovs_assert(!db->txn);
+    //ovs_assert(hmap_is_empty(&db->outstanding_txns));
+
+    if (db->lock_name
+        && (!lock_name || strcmp(lock_name, db->lock_name))) {
+        /* Release previous lock. */
+        struct jsonrpc_msg *msg = northd_db_compose_unlock_request(db);
+        free(db->lock_name);
+        db->lock_name = NULL;
+        db->is_lock_contended = false;
+        return msg;
+    }
+
+    if (lock_name && !db->lock_name) {
+        /* Acquire new lock. */
+        db->lock_name = xstrdup(lock_name);
+        return northd_db_compose_lock_request(db);
+    }
+
+    return NULL;
+}
+
+/* If 'lock_name' is nonnull, configures 'ctx' to obtain the named lock from
+ * the database server and to avoid modifying the database when the lock cannot
+ * be acquired (that is, when another client has the same lock).
+ *
+ * If 'lock_name' is NULL, drops the locking requirement and releases the
+ * lock. */
+static void
+northd_set_lock(struct northd_ctx *ctx, const char *lock_name)
+{
+    for (;;) {
+        struct jsonrpc_msg *msg = northd_db_set_lock(&ctx->data, lock_name);
+        if (!msg) {
+            break;
+        }
+        if (ctx->session) {
+            jsonrpc_session_send(ctx->session, msg);
+        }
+    }
+}
+
+/* Returns true if 'ctx' is configured to obtain a lock and owns that lock.
+ *
+ * Locking and unlocking happens asynchronously from the database client's
+ * point of view, so the information is only useful for optimization (e.g. if
+ * the client doesn't have the lock then there's no point in trying to write to
+ * the database). */
+static bool
+northd_has_lock(const struct northd_ctx *ctx)
+{
+    return ctx->data.has_lock;
+}
+
+#if 0  /* xxx not used */
+/* Returns true if 'ctx' is configured to obtain a lock but the database server
+ * has indicated that some other client already owns the requested lock. */
+static bool
+northd_is_lock_contended(const struct northd_ctx *ctx)
+{
+    return ctx->data.is_lock_contended;
+}
+#endif
+
+static void
+northd_db_update_has_lock(struct northd_db *db, bool new_has_lock)
+{
+    if (new_has_lock && !db->has_lock) {
+        if (db->ctx->state == S_MONITORING) {
+            /* xxx Changed to build. */
+            //db->change_seqno++;
+        } else {
+            /* We're setting up a session, so don't signal that the database
+             * changed.  Finalizing the session will increment change_seqno
+             * anyhow. */
+        }
+        db->is_lock_contended = false;
+    }
+    db->has_lock = new_has_lock;
+}
+
+static bool
+northd_db_process_lock_replies(struct northd_db *db,
+                               const struct jsonrpc_msg *msg)
+{
+    if (msg->type == JSONRPC_REPLY
+        && db->lock_request_id
+        && json_equal(db->lock_request_id, msg->id)) {
+        /* Reply to our "lock" request. */
+        northd_db_parse_lock_reply(db, msg->result);
+        return true;
+    }
+
+    if (msg->type == JSONRPC_NOTIFY) {
+        if (!strcmp(msg->method, "locked")) {
+            /* We got our lock. */
+            return northd_db_parse_lock_notify(db, msg->params, true);
+        } else if (!strcmp(msg->method, "stolen")) {
+            /* Someone else stole our lock. */
+            return northd_db_parse_lock_notify(db, msg->params, false);
+        }
+    }
+
+    return false;
+}
+
+static struct jsonrpc_msg *
+northd_db_compose_lock_request__(struct northd_db *db,
+                                    const char *method)
+{
+    northd_db_update_has_lock(db, false);
+
+    json_destroy(db->lock_request_id);
+    db->lock_request_id = NULL;
+
+    struct json *params = json_array_create_1(json_string_create(
+                                                  db->lock_name));
+    return jsonrpc_create_request(method, params, NULL);
+}
+
+static struct jsonrpc_msg *
+northd_db_compose_lock_request(struct northd_db *db)
+{
+    struct jsonrpc_msg *msg = northd_db_compose_lock_request__(db, "lock");
+    db->lock_request_id = json_clone(msg->id);
+    return msg;
+}
+
+static struct jsonrpc_msg *
+northd_db_compose_unlock_request(struct northd_db *db)
+{
+    return northd_db_compose_lock_request__(db, "unlock");
+}
+
+static void
+northd_db_parse_lock_reply(struct northd_db *db, const struct json *result)
+{
+    bool got_lock;
+
+    json_destroy(db->lock_request_id);
+    db->lock_request_id = NULL;
+
+    if (result->type == JSON_OBJECT) {
+        const struct json *locked;
+
+        locked = shash_find_data(json_object(result), "locked");
+        got_lock = locked && locked->type == JSON_TRUE;
+    } else {
+        got_lock = false;
+    }
+
+    northd_db_update_has_lock(db, got_lock);
+    if (!got_lock) {
+        db->is_lock_contended = true;
+    }
+}
+
+static bool
+northd_db_parse_lock_notify(struct northd_db *db, const struct json *params,
+                            bool new_has_lock)
+{
+    if (db->lock_name
+        && params->type == JSON_ARRAY
+        && json_array(params)->n > 0
+        && json_array(params)->elems[0]->type == JSON_STRING) {
+        const char *lock_name = json_string(json_array(params)->elems[0]);
+
+        if (!strcmp(db->lock_name, lock_name)) {
+            northd_db_update_has_lock(db, new_has_lock);
+            if (!new_has_lock) {
+                db->is_lock_contended = true;
+            }
+            return true;
+        }
+    }
+    return false;
+}
 
 static void
 northd_process_msg(struct northd_ctx *ctx, struct jsonrpc_msg *msg)
@@ -457,13 +661,10 @@ northd_process_msg(struct northd_ctx *ctx, struct jsonrpc_msg *msg)
         return;
     }
 
-#if 0
-    /* xxx Locking. */
     /* Process "lock" replies and related notifications. */
     if (northd_db_process_lock_replies(&ctx->data, msg)) {
         return;
     }
-#endif
 
 #if 0
     /* Process response to a database transaction we submitted. */
@@ -505,12 +706,6 @@ northd_run(struct northd_ctx *ctx, bool run_deltas)
     ovs_assert(!ctx->data.txn);
 #endif
 
-#if 0
-    if (ctx->state == S_MONITORING && ddlog_ops) {
-        northd_send_transact(ctx, ddlog_ops);
-    }
-#endif
-
     jsonrpc_session_run(ctx->session);
     for (int i = 0; jsonrpc_session_is_connected(ctx->session) && i < 50;
          i++) {
@@ -527,14 +722,11 @@ northd_run(struct northd_ctx *ctx, bool run_deltas)
 #endif
             northd_restart_fsm(ctx);
 
-#if 0
-            /* xxx Locking */
             if (ctx->data.lock_name) {
                 jsonrpc_session_send(
                     ctx->session,
                     northd_db_compose_lock_request(&ctx->data));
             }
-#endif
         }
 
         msg = jsonrpc_session_recv(ctx->session);
@@ -543,23 +735,19 @@ northd_run(struct northd_ctx *ctx, bool run_deltas)
         }
         northd_process_msg(ctx, msg);
         jsonrpc_msg_destroy(msg);
-        poll_immediate_wake();
     }
-    /* xxx Post-processing? */
-    /* xxx This string comparison isn't very efficient. */
 
+    /* xxx This string comparison isn't very efficient. */
     if (run_deltas && !ctx->request_id) {
         if (!strcmp(ctx->data.name, "OVN_Northbound")) {
             struct json *ops = get_nb_ops(ctx);
             if (ops) {
                 northd_send_transact(ctx->data.ctx, ops);
-                poll_immediate_wake();
             }
         } else if (!strcmp(ctx->data.name, "OVN_Southbound")) {
             struct json *ops = get_sb_ops(ctx);
             if (ops) {
                 northd_send_transact(ctx->data.ctx, ops);
-                poll_immediate_wake();
             }
         } else {
             VLOG_WARN("xxx Unknown db");
@@ -833,18 +1021,6 @@ main(int argc, char *argv[])
 
     daemonize_complete();
 
-#if 0
-    /* We want to detect only selected changes to the ovn-sb db. */
-    struct ovsdb_idl_loop ovnsb_idl_loop = OVSDB_IDL_LOOP_INITIALIZER(
-        ovsdb_idl_create(ovnsb_db, &sbrec_idl_class, false, true));
-
-    /* Ensure that only a single ovn-northd is active in the deployment by
-     * acquiring a lock called "ovn_northd" on the southbound database
-     * and then only performing DB transactions if the lock is held. */
-    ovsdb_idl_set_lock(ovnsb_idl_loop.idl, "ovn_northd");
-    bool had_lock = false;
-#endif
-
     ddlog_prog ddlog;
     ddlog = ddlog_run(1, true, NULL, 0, ddlog_print_error);
     if (!ddlog) {
@@ -856,13 +1032,28 @@ main(int argc, char *argv[])
     struct northd_ctx *sb_ctx = northd_ctx_create(ovnsb_db, "OVN_Southbound",
                                                   ddlog);
 
+    /* Ensure that only a single ovn-northd is active in the deployment by
+     * acquiring a lock called "ovn_northd" on the southbound database
+     * and then only performing DB transactions if the lock is held. */
+    northd_set_lock(sb_ctx, "ovn_northd");
+    bool had_lock = false;
+
     /* Main loop. */
     exiting = false;
     while (!exiting) {
-        /* xxx Set up lock like in ovn-northd-c to ensure only a single
-         * xxx ovn-northd instance is running. */
+        /* xxx Test that failover actually works. */
+        if (!had_lock && northd_has_lock(sb_ctx)) {
+            VLOG_INFO("ovn-northd lock acquired. "
+                      "This ovn-northd instance is now active.");
+            had_lock = true;
+        } else if (had_lock && !northd_has_lock(sb_ctx)) {
+            VLOG_INFO("ovn-northd lock lost. "
+                      "This ovn-northd instance is now on standby.");
+            had_lock = false;
+        }
 
-        bool run_deltas = (nb_ctx->state == S_MONITORING &&
+        bool run_deltas = (northd_has_lock(sb_ctx) &&
+                           nb_ctx->state == S_MONITORING &&
                            sb_ctx->state == S_MONITORING);
 
         northd_run(nb_ctx, run_deltas);
@@ -876,10 +1067,6 @@ main(int argc, char *argv[])
         if (exiting) {
             poll_immediate_wake();
         }
-
-        //if (nb_ctx->sb_ops || sb_ctx->nb_ops) {
-            //poll_immediate_wake();
-        //}
 
         poll_block();
         if (should_service_stop()) {
