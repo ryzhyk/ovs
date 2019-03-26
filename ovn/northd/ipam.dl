@@ -25,7 +25,7 @@ function mAC_ADDR_SPACE(): bit<64>  = 64'hffffff
 
 /* SwitchIPv4ReservedAddress - keeps track of statically reserved IPv4 addresses
  * for each switch whose subnet option is set, including:
- * (1) first address in the subnet range
+ * (1) first and last (multicast) address in the subnet range
  * (2) addresses from `other_config.exclude_ips`
  * (3) port addresses in lsp.addresses, except "unknown" addresses, addresses of
  *     "router" ports, dynamic addresses
@@ -42,6 +42,7 @@ SwitchIPv4ReservedAddress(.lswitch = ls._uuid,
             .subnet = Some{(_, _, start_ipv4, total_ipv4s)}),
     var exclude_ips = {
         var exclude_ips = set_singleton(start_ipv4);
+        set_insert(exclude_ips, start_ipv4 + total_ipv4s - 32'd1);
         match (map_get(ls.other_config, "exclude_ips")) {
             None -> exclude_ips,
             Some{exclude_ip_list} -> match (parse_ip_list(exclude_ip_list)) {
@@ -329,10 +330,18 @@ relation SwitchPortNewMACDynAddress(lsport: uuid, dyn_addr: Option<eth_addr>)
 SwitchPortNewMACDynAddress(lsp._uuid, mac_addr) :-
     &SwitchPort(.needs_dynamic_macaddress = false,
                 .lsp = lsp,
+                .sw = &sw,
                 .static_dynamic_mac = static_dynamic_mac),
     var mac_addr: Option<eth_addr> = match (static_dynamic_mac) {
         None -> None,
-        Some{addr} -> Some{eth_addr_from_uint64(addr)}
+        Some{addr} -> {
+            if (is_some(sw.subnet) or is_some(sw.ipv6_prefix) or
+                map_get(sw.ls.other_config, "mac_only") == Some{"true"}) {
+                Some{eth_addr_from_uint64(addr)}
+            } else {
+                None
+            }
+        }
     }.
 
 SwitchPortNewMACDynAddress(lsport, Some{eth_addr_from_uint64(addr)}) :-

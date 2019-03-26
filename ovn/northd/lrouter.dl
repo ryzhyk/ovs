@@ -367,7 +367,6 @@ RouterStaticRoute(ref_router, ref_route, port, lrp_addr_s) :-
     Some{var oport} = set_nth(route.lrsr.output_port, 0),
     /* output_port specified */
     port in &RouterPort(.lrp = nb.Logical_Router_Port{.name = oport},
-                        .router = &Router{.lr = nb.Logical_Router{._uuid = router.lr._uuid}},
                         .networks = networks),
     Some{var lrp_addr_s: string} =
         match (find_lrp_member_ip(networks, route.lrsr.nexthop)) {
