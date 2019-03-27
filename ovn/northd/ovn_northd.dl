@@ -396,18 +396,37 @@ for (nb_global in nb.NB_Global) {
  */
 nb.Out_NB_Global(.sb_cfg        = sb_cfg,
                  .hv_cfg        = nb_cfg,
-                 .ipsec         = ipsec) :-
-    nb.NB_Global(._uuid = nb_global_uuid, .ipsec = ipsec, .nb_cfg = nb_cfg),
+                 .ipsec         = ipsec,
+                 .options       = options) :-
+    nb.NB_Global(._uuid = nb_global_uuid, .ipsec = ipsec, .nb_cfg = nb_cfg, .options = opts),
     sb.SB_Global(.nb_cfg = sb_cfg),
-    not sb.Chassis().
+    not sb.Chassis(),
+    var options = match (map_get(opts, "mac_prefix")) {
+        None -> {
+            /* Hash NB_Global._uuid to obtain pseudo-random MAC prefix (in DDlog,
+             * outputs must be functions of inputs, so no external sources of non-deteminism
+             * are allowed.) */
+            var mac_prefix = eth_addr_mark_random(eth_addr_from_uint64(hash64(nb_global_uuid)));
+            map_insert_imm(opts, "mac_prefix", string_slice("${mac_prefix}", 0, 8))
+        },
+        _    -> opts
+    }.
 
 nb.Out_NB_Global(.sb_cfg        = sb_cfg,
                  .hv_cfg        = hv_cfg,
-                 .ipsec         = ipsec) :-
-    nb.NB_Global(._uuid = nb_global_uuid, .ipsec = ipsec),
+                 .ipsec         = ipsec,
+                 .options       = options) :-
+    nb.NB_Global(._uuid = nb_global_uuid, .ipsec = ipsec, .options = opts),
     sb.SB_Global(.nb_cfg = sb_cfg),
     sb.Chassis(.nb_cfg = chassis_cfg),
-    var hv_cfg = Aggregate((nb_global_uuid, ipsec, sb_cfg), group_first(chassis_cfg)).
+    var hv_cfg = Aggregate((nb_global_uuid, ipsec, sb_cfg, opts), group_first(chassis_cfg)),
+    var options = match (map_get(opts, "mac_prefix")) {
+        None -> {
+            var mac_prefix = eth_addr_mark_random(eth_addr_from_uint64(hash64(nb_global_uuid)));
+            map_insert_imm(opts, "mac_prefix", string_slice("${mac_prefix}", 0, 8))
+        },
+        _    -> opts
+    }.
 
 /*
  * Address_Set: copy from NB + additional records generated from NB Port_Group (two records for each

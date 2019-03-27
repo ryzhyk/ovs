@@ -126,6 +126,7 @@ extern function ip_parse_cidr(s: string): Either<string/*err*/, (ovs_be32/*ip*/,
 extern function eth_addr_from_string(s: string): Option<eth_addr>
 extern function eth_addr_to_uint64(ea: eth_addr): bit<64>
 extern function eth_addr_from_uint64(x: bit<64>): eth_addr
+extern function eth_addr_mark_random(ea: eth_addr): eth_addr
 
 /*
  * C functions imported from <arpa/inet.h>

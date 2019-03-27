@@ -15,8 +15,6 @@ import ovn
 import lswitch
 import lrouter
 
-
-function mAC_ADDR_PREFIX(): bit<64> = 64'h0A0000000000
 function mAC_ADDR_SPACE(): bit<64>  = 64'hffffff
 
 /*
@@ -275,12 +273,12 @@ SwitchPortAllocatedMACDynAddress(lsport, dyn_addr) :-
     port in &SwitchPort(.needs_dynamic_macaddress = true),
     var ports = Aggregate((), group2vec(port)),
     ReservedMACAddresses(reserved_addrs),
-    nb.NB_Global(.options = nb_options),
+    nb.Out_NB_Global(.options = nb_options),
     var mac_prefix = match (map_get(nb_options, "mac_prefix")) {
-        None -> mAC_ADDR_PREFIX(),
+        None -> { 64'd0 },
         Some{prefix} -> {
             match (scan_eth_addr_prefix(prefix)) {
-                None -> mAC_ADDR_PREFIX(),
+                None -> { 64'd0 },
                 Some{mac_prefix} -> mac_prefix
             }
         }

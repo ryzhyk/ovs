@@ -76,6 +76,14 @@ pub fn ovn_eth_addr_from_uint64(x: &u64) -> ovn_eth_addr {
     }
 }
 
+pub fn ovn_eth_addr_mark_random(ea: &ovn_eth_addr) -> ovn_eth_addr {
+    unsafe {
+        let mut ea_new = ea.clone();
+        eth_addr_mark_random(&mut ea_new as *mut ovn_eth_addr);
+        ea_new
+    }
+}
+
 pub fn ovn_eth_addr_to_uint64(ea: &ovn_eth_addr) -> u64 {
     unsafe {
         eth_addr_to_uint64(ea.clone()) as u64
@@ -630,6 +638,7 @@ extern "C" {
     fn eth_addr_from_string(s: *const raw::c_char, ea: *mut ovn_eth_addr) -> bool;
     fn eth_addr_to_uint64(ea: ovn_eth_addr) -> libc::uint64_t;
     fn eth_addr_from_uint64(x: libc::uint64_t, ea: *mut ovn_eth_addr);
+    fn eth_addr_mark_random(ea: *mut ovn_eth_addr);
     // include/openvswitch/json.h
     fn json_string_escape(str: *const raw::c_char, out: *mut ovs_ds);
     // openvswitch/dynamic-string.h
