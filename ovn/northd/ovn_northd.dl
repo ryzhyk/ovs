@@ -543,6 +543,7 @@ sb.Out_MAC_Binding (.logical_port =   mb.logical_port,
                     .mac          =   mb.mac,
                     .datapath     =   datapath_name) :-
     sb.MAC_Binding[mb],
+    sb.Out_Port_Binding(.logical_port = mb.logical_port),
     sb.UUIDMap_Datapath_Binding(datapath_name, Left{mb.datapath}).
 
 
