@@ -28,6 +28,7 @@ function mAC_ADDR_SPACE(): bit<64>  = 64'hffffff
  * (3) port addresses in lsp.addresses, except "unknown" addresses, addresses of
  *     "router" ports, dynamic addresses
  * (4) addresses associated with router ports peered with the switch.
+ * (5) static IP component of "dynamic" `lsp.addresses`.
  *
  * Addresses are kept in host-endian format (i.e., bit<32> vs ovs_be32).
  */
@@ -114,6 +115,11 @@ SwitchIPv4ReservedAddress(.lswitch = ls._uuid,
     },
     var addr = FlatMap(addrs).
 
+/* Add reserved address group (5) */
+SwitchIPv4ReservedAddress(.lswitch = sw.ls._uuid,
+                          .addr    = ntohl(ip_addr)) :-
+    &SwitchPort(.sw = &sw, .lsp = lsp, .static_dynamic_ip = Some{ip_addr}).
+
 /* Aggregate all reserved addresses for each switch. */
 relation SwitchIPv4ReservedAddresses(lswitch: uuid, addrs: Set<bit<32>>)
 
@@ -196,14 +202,36 @@ SwitchPortAllocatedIPv4DynAddress(lsport, dyn_addr) :-
     (var lsport, var dyn_addr) = port_address.
 
 /* Compute new dynamic IPv4 address assignment:
- * - port does not need dynamic IP - None
+ * - port does not need dynamic IP - use static_dynamic_ip if any
  * - a new address has been allocated for port - use this address
  * - otherwise, use existing dynamic IP
  */
 relation SwitchPortNewIPv4DynAddress(lsport: uuid, dyn_addr: Option<ovs_be32>)
 
-SwitchPortNewIPv4DynAddress(lsp._uuid, None) :-
-    &SwitchPort(.needs_dynamic_ipv4address = false, .lsp = lsp).
+SwitchPortNewIPv4DynAddress(lsp._uuid, ip_addr) :-
+    &SwitchPort(.sw = &sw,
+                .needs_dynamic_ipv4address = false,
+                .static_dynamic_ip = static_dynamic_ip,
+                .lsp = lsp),
+    var ip_addr: Option<ovs_be32> = {
+        match (static_dynamic_ip) {
+            None -> { None },
+            Some{addr} -> {
+                match (sw.subnet) {
+                    None -> { None },
+                    Some{(_, _, start_ipv4, total_ipv4s)} -> {
+                        var haddr = ntohl(addr);
+                        if (haddr < start_ipv4 or haddr >= start_ipv4 + total_ipv4s) {
+                            /* new static ip is not valid */
+                            None
+                        } else {
+                            Some{addr}
+                        }
+                    }
+                }
+            }
+        }
+    }.
 
 SwitchPortNewIPv4DynAddress(lsport, Some{htonl(addr)}) :-
     SwitchPortAllocatedIPv4DynAddress(lsport, addr).
@@ -270,8 +298,9 @@ relation SwitchPortAllocatedMACDynAddress(lsport: uuid, dyn_addr: bit<64>)
 
 SwitchPortAllocatedMACDynAddress(lsport, dyn_addr) :-
     /* Group all ports that need a dynamic IP address */
-    port in &SwitchPort(.needs_dynamic_macaddress = true),
-    var ports = Aggregate((), group2vec(port)),
+    port in &SwitchPort(.needs_dynamic_macaddress = true, .lsp = lsp),
+    SwitchPortNewIPv4DynAddress(lsp._uuid, ipv4_addr),
+    var ports = Aggregate((), group2vec((port, ipv4_addr))),
     ReservedMACAddresses(reserved_addrs),
     nb.Out_NB_Global(.options = nb_options),
     var mac_prefix = match (map_get(nb_options, "mac_prefix")) {
@@ -285,20 +314,30 @@ SwitchPortAllocatedMACDynAddress(lsport, dyn_addr) :-
     },
     var dyn_addresses = {
         var used_addrs = reserved_addrs;
-        var need_addr: Vec<uuid> = vec_empty();
-        for (port in ports) {
+        var need_addr: Vec<(uuid, Option<bit<64>>)> = vec_empty();
+        for (port_with_addr in ports) {
+            (var port, var ipv4_addr) = port_with_addr;
+            var hint: Option<bit<64>> = match (ipv4_addr) {
+                None       -> Some { mac_prefix | 64'd1 },
+                Some{addr} -> {
+                    /* The tentative MAC's suffix will be in the interval (1, 0xfffffe). */
+                    var mac_suffix: bit<24> = ntohl(addr)[23:0] % ((mAC_ADDR_SPACE() - 64'd1)[23:0]) + 24'd1;
+                    Some{ mac_prefix | ((0: bit<40>) ++ mac_suffix) }
+                }
+            };
             match (deref(port).dynamic_address) {
                 None -> {
                     /* no dynamic address yet -- allocate one now */
-                    vec_push(need_addr, deref(port).lsp._uuid)
+                    vec_push(need_addr, (deref(port).lsp._uuid, hint))
                 },
                 Some{dynaddr} -> {
                     var haddr = eth_addr_to_uint64(dynaddr.ea);
                     if ((haddr ^ mac_prefix) >> 64'd24 != 64'd0) {
                         /* existing dynamic address is no longer valid */
-                        vec_push(need_addr, deref(port).lsp._uuid)
+                        vec_push(need_addr, (deref(port).lsp._uuid, hint))
                     } else if (set_contains(used_addrs, haddr)) {
-                        vec_push(need_addr, deref(port).lsp._uuid);
+                        set_insert(used_addrs, haddr);
+                        //vec_push(need_addr, (deref(port).lsp._uuid, hint));
                         warn("Duplicate MAC set: ${dynaddr.ea}")
                     } else {
                         /* has valid dynamic address -- record it in used_addrs */
@@ -313,7 +352,26 @@ SwitchPortAllocatedMACDynAddress(lsport, dyn_addr) :-
         // removing the old address.
         // FIXME: OVN allocates MAC addresses by seeding them with IPv4 address.
         // Implement a custom allocation function that simulates this behavior.
-        allocate(used_addrs, need_addr, mac_prefix + 64'd1, mac_prefix + mAC_ADDR_SPACE() - 64'd1)
+        var used_addrs_strs: Vec<string> = vec_empty();
+        for (addr in used_addrs) {
+            vec_push(used_addrs_strs, "${addr}")
+        };
+        var need_addrs_strs: Vec<string> = vec_empty();
+        for (need in need_addr) {
+            (var uuid, var hint) = need;
+            var h = match (hint) {
+                None -> "",
+                Some{h} -> "${h}"
+            };
+            vec_push(need_addrs_strs, "${uuid2str(uuid)}(${h})")
+        };
+        var res = allocate_with_hint(used_addrs, need_addr, mac_prefix + 64'd1, mac_prefix + mAC_ADDR_SPACE() - 64'd1);
+        var res_strs: Vec<string> = vec_empty();
+        for (x in res) {
+            (var uuid, var addr) = x;
+            vec_push(res_strs, "${uuid2str(uuid)}: ${eth_addr_from_uint64(addr)}")
+        };
+        res
     },
     var port_address = FlatMap(dyn_addresses),
     (var lsport, var dyn_addr) = port_address.

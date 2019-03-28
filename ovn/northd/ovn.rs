@@ -7,6 +7,7 @@ use std::ptr;
 use std::default;
 use std::process;
 use libc;
+use super::__std;
 
 pub fn ovn_warn(msg: &String) {
     warn(msg.as_str())
@@ -359,7 +360,26 @@ pub fn ovn_scan_eth_addr_prefix(s: &String) -> std_Option<u64> {
     }
 }
 
-
+pub fn ovn_scan_static_dynamic_ip(s: &String) -> std_Option<ovn_ovs_be32> {
+    let mut ip0: u8 = 0;
+    let mut ip1: u8 = 0;
+    let mut ip2: u8 = 0;
+    let mut ip3: u8 = 0;
+    let mut n: raw::c_uint = 0;
+    unsafe {
+        if ovs_scan(string2cstr(s).as_ptr(), b"dynamic %hhu.%hhu.%hhu.%hhu%n\0".as_ptr() as *const raw::c_char,
+                    &mut ip0 as *mut u8,
+                    &mut ip1 as *mut u8,
+                    &mut ip2 as *mut u8,
+                    &mut ip3 as *mut u8,
+                    &mut n) && s.len() == (n as usize)
+        {
+            std_Option::std_Some{x: std_htonl(&(((ip0 as u32) << 24)  | ((ip1 as u32) << 16) | ((ip2 as u32) << 8) | (ip3 as u32)))}
+        } else {
+            std_Option::std_None
+        }
+    }
+}
 
 pub fn ovn_ip_address_and_port_from_lb_key(k: &String) ->
     std_Option<(String, u16, u32)> {
