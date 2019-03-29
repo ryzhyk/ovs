@@ -735,18 +735,10 @@ sb.Out_DHCPv6_Options (
 
 sb.Out_DNS(.records      = nbdns.records,
            .datapaths    = datapaths,
-           .external_ids = nbdns.external_ids) :-
+           .external_ids = map_insert_imm(nbdns.external_ids, "dns_id", uuid2str(nbdns._uuid))) :-
     nb.DNS[nbdns],
     LogicalSwitchDNS(ls_uuid, nbdns._uuid),
     var datapaths = Aggregate((nbdns), group2set(uuid2name(ls_uuid))).
-
-/*
-sb.Out_DNS(.records      = nbdns.records,
-           .datapaths    = set_empty(),
-           .external_ids = nbdns.external_ids) :-
-    nb.DNS[nbdns],
-    not LogicalSwitchDNS(_, nbdns._uuid).
-*/
 
 /*
  * RBAC_Permission: fixed
