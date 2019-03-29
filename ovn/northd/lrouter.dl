@@ -75,16 +75,32 @@ LogicalRouterNAT(lr, nat) :-
     var nat_uuid = FlatMap(nats),
     nat in &NATRef[nb.NAT{._uuid = nat_uuid}].
 
-relation LogicalRouterSNATExternalIPs(lr: uuid, external_ips: Set<string>)
+relation LogicalRouterNATs(lr: uuid, nat: Vec<Ref<nb.NAT>>)
 
-LogicalRouterSNATExternalIPs(lr, external_ips) :-
-    LogicalRouterNAT(lr, &nb.NAT{.__type = "snat", .external_ip = external_ip}),
-    var external_ips = Aggregate((lr), group2set(external_ip)).
+LogicalRouterNATs(lr, nats) :-
+     LogicalRouterNAT(lr, nat),
+     var nats = Aggregate((lr), group2vec(nat)).
 
-LogicalRouterSNATExternalIPs(lr, set_empty()) :-
+LogicalRouterNATs(lr, vec_empty()) :-
     nb.Logical_Router(._uuid = lr),
-    not LogicalRouterNAT(lr, &nb.NAT{.__type = "snat"}).
+    not LogicalRouterNAT(lr, _).
 
+relation LogicalRouterLB(lr: uuid, nat: Ref<nb.Load_Balancer>)
+
+LogicalRouterLB(lr, lb) :-
+    nb.Logical_Router(._uuid = lr, .load_balancer = lbs),
+    var lb_uuid = FlatMap(lbs),
+    lb in &LoadBalancerRef[nb.Load_Balancer{._uuid = lb_uuid}].
+
+relation LogicalRouterLBs(lr: uuid, nat: Vec<Ref<nb.Load_Balancer>>)
+
+LogicalRouterLBs(lr, lbs) :-
+     LogicalRouterLB(lr, lb),
+     var lbs = Aggregate((lr), group2vec(lb)).
+
+LogicalRouterLBs(lr, vec_empty()) :-
+    nb.Logical_Router(._uuid = lr),
+    not LogicalRouterLB(lr, _).
 
 /* Router relation collects all attributes of a logical router.
  *
@@ -108,7 +124,8 @@ relation &Router(
     l3dgw_port:         Option<nb.Logical_Router_Port>,
     redirect_port_name: string,
     is_gateway:         bool,
-    snat_external_ips:  Set<string>
+    nats:               Vec<Ref<nb.NAT>>,
+    lbs:                Vec<Ref<nb.Load_Balancer>>
 )
 
 &Router(.lr = lr,
@@ -120,18 +137,19 @@ relation &Router(
                 _ -> ""
             },
         .is_gateway = is_some(map_get(lr.options, "chassis")),
-        .snat_external_ips = snat_external_ips) :-
+        .nats = nats,
+        .lbs  = lbs) :-
     nb.Logical_Router[lr],
     LogicalRouterRedirectPort(lr._uuid, l3dgw_port),
-    LogicalRouterSNATExternalIPs(lr._uuid, snat_external_ips).
+    LogicalRouterNATs(lr._uuid, nats),
+    LogicalRouterLBs(lr._uuid, lbs).
 
 /* RouterLB: many-to-many relation between logical routers and nb.LB */
 relation RouterLB(router: Ref<Router>, lb: Ref<nb.Load_Balancer>)
 
 RouterLB(router, lb) :-
-    router in &Router(.lr = nb.Logical_Router{.load_balancer = lb_ids}),
-    var lb_id = FlatMap(lb_ids),
-    lb in &LoadBalancerRef[nb.Load_Balancer{._uuid = lb_id}].
+    router in &Router(.lbs = lbs),
+    var lb = FlatMap(lbs).
 
 /* Load balancer VIPs associated with routers */
 relation RouterLBVIP(router: Ref<Router>, lb: Ref<nb.Load_Balancer>, vip: (string, string))
