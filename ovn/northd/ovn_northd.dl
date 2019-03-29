@@ -740,11 +740,13 @@ sb.Out_DNS(.records      = nbdns.records,
     LogicalSwitchDNS(ls_uuid, nbdns._uuid),
     var datapaths = Aggregate((nbdns), group2set(uuid2name(ls_uuid))).
 
+/*
 sb.Out_DNS(.records      = nbdns.records,
            .datapaths    = set_empty(),
            .external_ids = nbdns.external_ids) :-
     nb.DNS[nbdns],
     not LogicalSwitchDNS(_, nbdns._uuid).
+*/
 
 /*
  * RBAC_Permission: fixed
@@ -2532,7 +2534,7 @@ for (LogicalSwitchHasDNSRecords(ls, true))
     var lsname = uuid2name(ls) in
     {
         Flow(.logical_datapath = lsname,
-             .stage         = switch_stage(IN, DNS_RESPONSE),
+             .stage         = switch_stage(IN, DNS_LOOKUP),
              .priority         = 100,
              .__match          = "udp.dst == 53",
              .actions          = "${rEGBIT_DNS_LOOKUP_RESULT()} = dns_lookup(); next;",
