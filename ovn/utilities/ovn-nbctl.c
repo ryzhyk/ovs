@@ -41,6 +41,7 @@
 #include "timeval.h"
 #include "timer.h"
 #include "unixctl.h"
+#include "unistd.h"
 #include "util.h"
 #include "openvswitch/vlog.h"
 
@@ -227,6 +228,7 @@ main(int argc, char *argv[])
     idl = the_idl = NULL;
 
     free(args);
+    sleep(1);
     exit(EXIT_SUCCESS);
 }
 

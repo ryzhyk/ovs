@@ -541,8 +541,8 @@ if $ovn; then
     for i in $(seq $n_northds); do
         if [ $i -eq 1 ]; then inst=""; else inst=$i; fi
         rungdb $gdb_ovn_northd $gdb_ovn_northd_ex $ovn_northd --detach \
-               --no-chdir --pidfile=ovn-northd${inst}.pid -vconsole:off \
-               --log-file=ovn-northd${inst}.log -vsyslog:off \
+               --no-chdir --pidfile=${ovn_northd}${inst}.pid -vconsole:off \
+               --log-file=${ovn_northd}${inst}.log -vsyslog:off \
                --ovnsb-db="$OVN_SB_DB" --ovnnb-db="$OVN_NB_DB"
     done
     for i in $(seq $n_controllers); do
