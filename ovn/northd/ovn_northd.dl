@@ -255,7 +255,7 @@ function get_nat_addresses(rport: RouterPort): Set<string> =
                                 match (eth_addr_from_string(set_space_sep(nat.external_mac))) {
                                     Some{emac} -> {
                                         set_insert(addresses,
-                                                   "${emac} ${nat.external_ip} is_chassis_resident(\"set_space_sep(nat.logical_port)\")")
+                                                   "${emac} ${nat.external_ip} is_chassis_resident(\"${set_space_sep(nat.logical_port)}\")")
                                     },
                                     None -> ()
                                 }
@@ -282,7 +282,7 @@ function get_nat_addresses(rport: RouterPort): Set<string> =
                 /* Gratuitous ARP for centralized NAT rules on distributed gateway
                  * ports should be restricted to the "redirect-chassis". */
                 if (has_redirect) {
-                    c_addresses = c_addresses ++ " is_chassis_resident(router.redirect_port_name)"
+                    c_addresses = c_addresses ++ " is_chassis_resident(${router.redirect_port_name})"
                 } else ();
 
                 set_insert(addresses, c_addresses)
