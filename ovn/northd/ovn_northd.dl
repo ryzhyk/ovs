@@ -4587,6 +4587,32 @@ for (&Router(.dpname = dpname,
  * In the common case where the Ethernet destination has been resolved,
  * this table outputs the packet (priority 0).  Otherwise, it composes
  * and sends an ARP/IPv6 NA request (priority 100). */
+
+for (RouterStaticRoute(.router      = &router,
+                       .route       = &route,
+                       .output_port = &out_port,
+                       .lrp_addr_s  = lrp_addr_s))
+{
+    Right{(var gw_ip6, 128)} = ipv6_parse_cidr(route.lrsr.nexthop) in
+    var __match = "eth.dst == 00:00:00:00:00:00 && "
+                  "ip6 && xxreg0 == ${route.lrsr.nexthop}" in
+    var sn_addr = in6_addr_solicited_node(gw_ip6) in
+    var eth_dst = ipv6_multicast_to_ethernet(sn_addr) in
+    var sn_addr_s = ipv6_string_mapped(sn_addr) in
+    var actions = "nd_ns { "
+                  "eth.dst = ${eth_dst}; "
+                  "ip6.dst = ${sn_addr_s}; "
+                  "nd.target = ${route.lrsr.nexthop}; "
+                  "output; "
+                  "};" in
+    Flow(.logical_datapath = router.dpname,
+         .stage         = router_stage(IN, ARP_REQUEST),
+         .priority         = 200,
+         .__match          = __match,
+         .actions          = actions,
+         .external_ids     = map_empty())
+}
+
 for (&Router(.dpname = dpname))
 {
     Flow(.logical_datapath = dpname,
