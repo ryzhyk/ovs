@@ -94,7 +94,7 @@ sb.Out_Port_Binding(.uuid_name          = uuid2name(lsp._uuid),
     &SwitchPort(.lsp = lsp, .sw = &sw),
     SwitchPortNewDynamicTag(lsp._uuid, opt_tag),
     var tag: Set<integer> = match (opt_tag) {
-        None -> set_empty(),
+        None -> lsp.tag,
         Some{t} -> set_singleton(t)
     },
     lsp.__type != "router",
@@ -304,6 +304,8 @@ RouterPortRAOptionsComplete(lrp, map_empty()) :-
     not RouterPortRAOptions(lrp, _).
 
 
+function gateway_chassis_uuid_name(lr_uuid: uuid): string = { "gw" ++ uuid2name(lr_uuid) }
+
 /*
  * Create derived port for Logical_Router_Ports with non-empty 'gateway_chassis' column.
  */
@@ -325,7 +327,7 @@ sb.Out_Port_Binding(.uuid_name          = "cr" ++ uuid2name(lrp._uuid),
     var gateway_chassis = if (not set_is_empty(lrp.gateway_chassis)) {
         set_map_uuid2name(lrp.gateway_chassis)
     } else {
-        set_singleton(uuid2name(lr_uuid))
+        set_singleton(gateway_chassis_uuid_name(lr_uuid))
     }.
 
 /* Create sb.Gateway_Chassis for derived ports.
@@ -344,7 +346,7 @@ sb.Out_Gateway_Chassis(.uuid_name       = uuid2name(gateway_chassis_uuid),
     gw_chassis in nb.Gateway_Chassis(._uuid = gateway_chassis_uuid),
     sb.Chassis(._uuid = chassis_uuid, .name = gw_chassis.chassis_name).
 
-sb.Out_Gateway_Chassis(.uuid_name       = uuid2name(lr_uuid),
+sb.Out_Gateway_Chassis(.uuid_name       = gateway_chassis_uuid_name(lr_uuid),
                        .name            = "${lrp.name}_${redirect_chassis}",
                        .chassis         = set_singleton(chassis_uuid),
                        .priority        = 0,
@@ -834,7 +836,7 @@ nb.Out_Logical_Switch_Port(.uuid_name              = uuid2name(lsp._uuid),
     },
     SwitchPortNewDynamicTag(lsp._uuid, opt_tag),
     var tag: Set<integer> = match (opt_tag) {
-        None -> set_empty(),
+        None -> lsp.tag,
         Some{t} -> set_singleton(t)
     }.
 
@@ -2628,7 +2630,8 @@ for (&SwitchPort(.lsp = lsp,
                  .sw = &sw,
                  .peer = Some{&RouterPort{.lrp = lrp,
                                           .is_redirect = is_redirect,
-                                          .router = &Router{.lr = lr}}})
+                                          .router = &Router{.lr = lr,
+                                                            .redirect_port_name = redirect_port_name}}})
      if (set_contains(lsp.addresses, "router")))
 {
     Some{var mac} = scan_eth_addr(lrp.mac) in {
@@ -2651,7 +2654,7 @@ for (&SwitchPort(.lsp = lsp,
             /* The destination lookup flow for the router's
              * distributed gateway port MAC address should only be
              * programmed on the "redirect-chassis". */
-            "eth.dst == ${mac} && is_chassis_resident(${json_string_escape(chassis_redirect_name(lrp.name))})"
+            "eth.dst == ${mac} && is_chassis_resident(${redirect_port_name})"
         } else {
             "eth.dst == ${mac}"
         } in
@@ -3087,7 +3090,7 @@ for (RouterPortNetworksIPv4Addr(.port = &RouterPort{.lrp = lrp,
             "&& arp.tpa == ${addr.addr_s}"
             " && arp.op == 1" ++
             if (add_chassis_resident_check) {
-                " && is_chassis_resident(${json_string_escape(chassis_redirect_name(lrp.name))})"
+                " && is_chassis_resident(${router.redirect_port_name})"
             } else "" in
         var actions =
             "put_arp(inport, arp.spa, arp.sha); "
@@ -4811,6 +4814,8 @@ QueueIDAllocation(port, Some{qid}) :-
  * 1. For ports that need a dynamically allocated tag, existing tag, if any,
  * 2. For ports that have a statically assigned tag (via `tag_request`), the
  *    `tag_request` value.
+ * 3. For ports that do not have a tag_request, but have a tag statically assigned
+ *    by directly setting the `tag` field, use this value.
  */
 output relation SwitchPortReservedTag(parent_name: string, tags: integer)
 
@@ -4819,7 +4824,10 @@ SwitchPortReservedTag(parent_name, tag) :-
     Some{var tag} = if (needs_dynamic_tag) {
         set_nth(lsp.tag, 0)
     } else {
-        set_nth(lsp.tag_request, 0)
+        match (set_nth(lsp.tag_request, 0)) {
+            Some{req} -> Some{req},
+            None      -> set_nth(lsp.tag, 0)
+        }
     }.
 
 output relation SwitchPortReservedTags(parent_name: string, tags: Set<integer>)
