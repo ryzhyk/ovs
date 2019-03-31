@@ -137,6 +137,15 @@ pub fn ovn_in6_is_lla(addr: &ovn_in6_addr) -> bool {
     unsafe {in6_is_lla(addr as *const ovn_in6_addr)}
 }
 
+pub fn ovn_in6_addr_solicited_node(ip6: &ovn_in6_addr) -> ovn_in6_addr
+{
+    let mut res: ovn_in6_addr = Default::default();
+    unsafe {
+        in6_addr_solicited_node(&mut res as *mut ovn_in6_addr, ip6 as *const ovn_in6_addr);
+    }
+    res
+}
+
 pub fn ovn_ipv6_addr_bitand(a: &ovn_in6_addr, b: &ovn_in6_addr) -> ovn_in6_addr {
     unsafe {
         ipv6_addr_bitand(a as *const ovn_in6_addr, b as *const ovn_in6_addr)
@@ -269,6 +278,15 @@ pub fn ovn_ipv6_create_mask(mask: &u32) -> ovn_in6_addr
 pub fn ovn_ipv6_is_zero(a: &ovn_in6_addr) -> bool
 {
     unsafe{ipv6_is_zero(a as *const ovn_in6_addr)}
+}
+
+pub fn ovn_ipv6_multicast_to_ethernet(ip6: &ovn_in6_addr) -> ovn_eth_addr
+{
+    let mut eth: ovn_eth_addr = Default::default();
+    unsafe{
+        ipv6_multicast_to_ethernet(&mut eth as *mut ovn_eth_addr, ip6 as *const ovn_in6_addr);
+    }
+    eth
 }
 
 pub fn ovn_ip_parse_masked(s: &String) -> std_Either<String, (ovn_ovs_be32, ovn_ovs_be32)>
@@ -652,6 +670,7 @@ extern "C" {
     fn ipv6_addr_bitand(a: *const ovn_in6_addr, b: *const ovn_in6_addr) -> ovn_in6_addr;
     fn ipv6_create_mask(mask: raw::c_uint) -> ovn_in6_addr;
     fn ipv6_is_zero(a: *const ovn_in6_addr) -> bool;
+    fn ipv6_multicast_to_ethernet(eth: *mut ovn_eth_addr, ip6: *const ovn_in6_addr);
     fn ip_parse_masked(s: *const raw::c_char, ip: *mut ovn_ovs_be32, mask: *mut ovn_ovs_be32) -> *mut raw::c_char;
     fn ip_parse_cidr(s: *const raw::c_char, ip: *mut ovn_ovs_be32, plen: *mut raw::c_uint) -> *mut raw::c_char;
     fn ip_parse(s: *const raw::c_char, ip: *mut ovn_ovs_be32) -> bool;
@@ -659,14 +678,16 @@ extern "C" {
     fn eth_addr_to_uint64(ea: ovn_eth_addr) -> libc::uint64_t;
     fn eth_addr_from_uint64(x: libc::uint64_t, ea: *mut ovn_eth_addr);
     fn eth_addr_mark_random(ea: *mut ovn_eth_addr);
+    fn in6_generate_eui64(ea: ovn_eth_addr, prefix: *const ovn_in6_addr, lla: *mut ovn_in6_addr);
+    fn in6_generate_lla(ea: ovn_eth_addr, lla: *mut ovn_in6_addr);
+    fn in6_is_lla(addr: *const ovn_in6_addr) -> bool;
+    fn in6_addr_solicited_node(addr: *mut ovn_in6_addr, ip6: *const ovn_in6_addr);
+
     // include/openvswitch/json.h
     fn json_string_escape(str: *const raw::c_char, out: *mut ovs_ds);
     // openvswitch/dynamic-string.h
     fn ds_destroy(ds: *mut ovs_ds);
     fn ds_cstr(ds: *const ovs_ds) -> *const raw::c_char;
-    fn in6_generate_lla(ea: ovn_eth_addr, lla: *mut ovn_in6_addr);
-    fn in6_generate_eui64(ea: ovn_eth_addr, prefix: *const ovn_in6_addr, lla: *mut ovn_in6_addr);
-    fn in6_is_lla(addr: *const ovn_in6_addr) -> bool;
     fn svec_destroy(v: *mut ovs_svec);
     fn ovs_scan(s: *const raw::c_char, format: *const raw::c_char, ...) -> bool;
     fn count_1bits(x: libc::uint64_t) -> raw::c_uint;
