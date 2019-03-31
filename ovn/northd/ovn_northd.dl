@@ -4239,7 +4239,7 @@ for (&RouterPort[port@RouterPort{.lrp = lrp@nb.Logical_Router_Port{.peer = set_e
                           "outport = inport; flags.loopback = 1; "
                           "output;" in
             Flow(.logical_datapath = router.dpname,
-                 .stage         = router_stage(IN, ND_RA_OPTIONS),
+                 .stage         = router_stage(IN, ND_RA_RESPONSE),
                  .priority         = 50,
                  .__match          = __match,
                  .actions          = actions,
