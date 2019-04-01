@@ -94,7 +94,7 @@ sb.Out_Port_Binding(.uuid_name          = uuid2name(lsp._uuid),
     &SwitchPort(.lsp = lsp, .sw = &sw),
     SwitchPortNewDynamicTag(lsp._uuid, opt_tag),
     var tag: Set<integer> = match (opt_tag) {
-        None -> set_empty(),
+        None -> lsp.tag,
         Some{t} -> set_singleton(t)
     },
     lsp.__type != "router",
@@ -255,7 +255,7 @@ function get_nat_addresses(rport: RouterPort): Set<string> =
                                 match (eth_addr_from_string(set_space_sep(nat.external_mac))) {
                                     Some{emac} -> {
                                         set_insert(addresses,
-                                                   "${emac} ${nat.external_ip} is_chassis_resident(\"set_space_sep(nat.logical_port)\")")
+                                                   "${emac} ${nat.external_ip} is_chassis_resident(\"${set_space_sep(nat.logical_port)}\")")
                                     },
                                     None -> ()
                                 }
@@ -282,7 +282,7 @@ function get_nat_addresses(rport: RouterPort): Set<string> =
                 /* Gratuitous ARP for centralized NAT rules on distributed gateway
                  * ports should be restricted to the "redirect-chassis". */
                 if (has_redirect) {
-                    c_addresses = c_addresses ++ " is_chassis_resident(router.redirect_port_name)"
+                    c_addresses = c_addresses ++ " is_chassis_resident(${router.redirect_port_name})"
                 } else ();
 
                 set_insert(addresses, c_addresses)
@@ -303,6 +303,8 @@ RouterPortRAOptionsComplete(lrp, map_empty()) :-
     nb.Logical_Router_Port(._uuid = lrp),
     not RouterPortRAOptions(lrp, _).
 
+
+function gateway_chassis_uuid_name(lr_uuid: uuid): string = { "gw" ++ uuid2name(lr_uuid) }
 
 /*
  * Create derived port for Logical_Router_Ports with non-empty 'gateway_chassis' column.
@@ -325,7 +327,7 @@ sb.Out_Port_Binding(.uuid_name          = "cr" ++ uuid2name(lrp._uuid),
     var gateway_chassis = if (not set_is_empty(lrp.gateway_chassis)) {
         set_map_uuid2name(lrp.gateway_chassis)
     } else {
-        set_singleton(uuid2name(lr_uuid))
+        set_singleton(gateway_chassis_uuid_name(lr_uuid))
     }.
 
 /* Create sb.Gateway_Chassis for derived ports.
@@ -344,7 +346,7 @@ sb.Out_Gateway_Chassis(.uuid_name       = uuid2name(gateway_chassis_uuid),
     gw_chassis in nb.Gateway_Chassis(._uuid = gateway_chassis_uuid),
     sb.Chassis(._uuid = chassis_uuid, .name = gw_chassis.chassis_name).
 
-sb.Out_Gateway_Chassis(.uuid_name       = uuid2name(lr_uuid),
+sb.Out_Gateway_Chassis(.uuid_name       = gateway_chassis_uuid_name(lr_uuid),
                        .name            = "${lrp.name}_${redirect_chassis}",
                        .chassis         = set_singleton(chassis_uuid),
                        .priority        = 0,
@@ -735,16 +737,10 @@ sb.Out_DHCPv6_Options (
 
 sb.Out_DNS(.records      = nbdns.records,
            .datapaths    = datapaths,
-           .external_ids = nbdns.external_ids) :-
+           .external_ids = map_insert_imm(nbdns.external_ids, "dns_id", uuid2str(nbdns._uuid))) :-
     nb.DNS[nbdns],
     LogicalSwitchDNS(ls_uuid, nbdns._uuid),
     var datapaths = Aggregate((nbdns), group2set(uuid2name(ls_uuid))).
-
-sb.Out_DNS(.records      = nbdns.records,
-           .datapaths    = set_empty(),
-           .external_ids = nbdns.external_ids) :-
-    nb.DNS[nbdns],
-    not LogicalSwitchDNS(_, nbdns._uuid).
 
 /*
  * RBAC_Permission: fixed
@@ -840,7 +836,7 @@ nb.Out_Logical_Switch_Port(.uuid_name              = uuid2name(lsp._uuid),
     },
     SwitchPortNewDynamicTag(lsp._uuid, opt_tag),
     var tag: Set<integer> = match (opt_tag) {
-        None -> set_empty(),
+        None -> lsp.tag,
         Some{t} -> set_singleton(t)
     }.
 
@@ -2532,7 +2528,7 @@ for (LogicalSwitchHasDNSRecords(ls, true))
     var lsname = uuid2name(ls) in
     {
         Flow(.logical_datapath = lsname,
-             .stage         = switch_stage(IN, DNS_RESPONSE),
+             .stage         = switch_stage(IN, DNS_LOOKUP),
              .priority         = 100,
              .__match          = "udp.dst == 53",
              .actions          = "${rEGBIT_DNS_LOOKUP_RESULT()} = dns_lookup(); next;",
@@ -2634,7 +2630,8 @@ for (&SwitchPort(.lsp = lsp,
                  .sw = &sw,
                  .peer = Some{&RouterPort{.lrp = lrp,
                                           .is_redirect = is_redirect,
-                                          .router = &Router{.lr = lr}}})
+                                          .router = &Router{.lr = lr,
+                                                            .redirect_port_name = redirect_port_name}}})
      if (set_contains(lsp.addresses, "router")))
 {
     Some{var mac} = scan_eth_addr(lrp.mac) in {
@@ -2657,7 +2654,7 @@ for (&SwitchPort(.lsp = lsp,
             /* The destination lookup flow for the router's
              * distributed gateway port MAC address should only be
              * programmed on the "redirect-chassis". */
-            "eth.dst == ${mac} && is_chassis_resident(${json_string_escape(chassis_redirect_name(lrp.name))})"
+            "eth.dst == ${mac} && is_chassis_resident(${redirect_port_name})"
         } else {
             "eth.dst == ${mac}"
         } in
@@ -3093,7 +3090,7 @@ for (RouterPortNetworksIPv4Addr(.port = &RouterPort{.lrp = lrp,
             "&& arp.tpa == ${addr.addr_s}"
             " && arp.op == 1" ++
             if (add_chassis_resident_check) {
-                " && is_chassis_resident(${json_string_escape(chassis_redirect_name(lrp.name))})"
+                " && is_chassis_resident(${router.redirect_port_name})"
             } else "" in
         var actions =
             "put_arp(inport, arp.spa, arp.sha); "
@@ -4242,7 +4239,7 @@ for (&RouterPort[port@RouterPort{.lrp = lrp@nb.Logical_Router_Port{.peer = set_e
                           "outport = inport; flags.loopback = 1; "
                           "output;" in
             Flow(.logical_datapath = router.dpname,
-                 .stage         = router_stage(IN, ND_RA_OPTIONS),
+                 .stage         = router_stage(IN, ND_RA_RESPONSE),
                  .priority         = 50,
                  .__match          = __match,
                  .actions          = actions,
@@ -4590,6 +4587,32 @@ for (&Router(.dpname = dpname,
  * In the common case where the Ethernet destination has been resolved,
  * this table outputs the packet (priority 0).  Otherwise, it composes
  * and sends an ARP/IPv6 NA request (priority 100). */
+
+for (RouterStaticRoute(.router      = &router,
+                       .route       = &route,
+                       .output_port = &out_port,
+                       .lrp_addr_s  = lrp_addr_s))
+{
+    Right{(var gw_ip6, 128)} = ipv6_parse_cidr(route.lrsr.nexthop) in
+    var __match = "eth.dst == 00:00:00:00:00:00 && "
+                  "ip6 && xxreg0 == ${route.lrsr.nexthop}" in
+    var sn_addr = in6_addr_solicited_node(gw_ip6) in
+    var eth_dst = ipv6_multicast_to_ethernet(sn_addr) in
+    var sn_addr_s = ipv6_string_mapped(sn_addr) in
+    var actions = "nd_ns { "
+                  "eth.dst = ${eth_dst}; "
+                  "ip6.dst = ${sn_addr_s}; "
+                  "nd.target = ${route.lrsr.nexthop}; "
+                  "output; "
+                  "};" in
+    Flow(.logical_datapath = router.dpname,
+         .stage         = router_stage(IN, ARP_REQUEST),
+         .priority         = 200,
+         .__match          = __match,
+         .actions          = actions,
+         .external_ids     = map_empty())
+}
+
 for (&Router(.dpname = dpname))
 {
     Flow(.logical_datapath = dpname,
@@ -4817,6 +4840,8 @@ QueueIDAllocation(port, Some{qid}) :-
  * 1. For ports that need a dynamically allocated tag, existing tag, if any,
  * 2. For ports that have a statically assigned tag (via `tag_request`), the
  *    `tag_request` value.
+ * 3. For ports that do not have a tag_request, but have a tag statically assigned
+ *    by directly setting the `tag` field, use this value.
  */
 output relation SwitchPortReservedTag(parent_name: string, tags: integer)
 
@@ -4825,7 +4850,10 @@ SwitchPortReservedTag(parent_name, tag) :-
     Some{var tag} = if (needs_dynamic_tag) {
         set_nth(lsp.tag, 0)
     } else {
-        set_nth(lsp.tag_request, 0)
+        match (set_nth(lsp.tag_request, 0)) {
+            Some{req} -> Some{req},
+            None      -> set_nth(lsp.tag, 0)
+        }
     }.
 
 output relation SwitchPortReservedTags(parent_name: string, tags: Set<integer>)

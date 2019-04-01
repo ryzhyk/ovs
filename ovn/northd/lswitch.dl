@@ -105,14 +105,21 @@ LogicalSwitchDNS(ls._uuid, dns_uuid) :-
     var dns_uuid = FlatMap(ls.dns_records),
     nb.DNS(._uuid = dns_uuid).
 
+relation LogicalSwitchWithDNSRecords(ls: uuid)
+
+LogicalSwitchWithDNSRecords(ls) :-
+    LogicalSwitchDNS(ls, dns_uuid),
+    nb.DNS(._uuid = dns_uuid, .records = records),
+    not map_is_empty(records).
+
 relation LogicalSwitchHasDNSRecords(ls: uuid, has_dns_records: bool)
 
 LogicalSwitchHasDNSRecords(ls, true) :-
-    LogicalSwitchDNS(ls, _).
+    LogicalSwitchWithDNSRecords(ls).
 
 LogicalSwitchHasDNSRecords(ls, false) :-
     nb.Logical_Switch(._uuid = ls),
-    not LogicalSwitchDNS(.ls_uuid = ls).
+    not LogicalSwitchWithDNSRecords(ls).
 
 /* Switch relation collects all attributes of a logical switch */
 
