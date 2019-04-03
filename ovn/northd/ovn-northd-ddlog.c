@@ -172,7 +172,7 @@ static bool
 debug_dump_callback(uintptr_t arg OVS_UNUSED, const ddlog_record *rec)
 {
     char *str = ddlog_dump_record(rec);
-    VLOG_WARN("%s", str);
+    VLOG_INFO("%s", str);
     ddlog_string_free(str);
 
     return true;
@@ -188,10 +188,10 @@ ddlog_table_debug_dump(ddlog_prog ddlog, const char *table)
 {
     table_id tid = ddlog_get_table_id(table);
     if (tid == -1) {
-        VLOG_WARN("Unknown output table %s", table);
+        VLOG_ERR("Unknown output table %s", table);
         return;
     }
-    VLOG_WARN("Dump %s", table);
+    VLOG_INFO("Dump %s", table);
     ddlog_dump_table(ddlog, tid, debug_dump_callback, 0);
 }
 
@@ -342,15 +342,15 @@ northd_send_monitor_request(struct northd_ctx *ctx, struct northd_db *db)
     struct ovsdb_error *error;
 
     if (db->schema) {
-        VLOG_WARN("xxx schema: %s", json_to_string(db->schema, 0));
+        VLOG_INFO("xxx schema: %s", json_to_string(db->schema, 0));
     } else {
-        VLOG_WARN("xxx no schema");
+        VLOG_INFO("xxx no schema");
     }
     error = ovsdb_schema_from_json(db->schema, &schema);
     if (error) {
         /* xxx Handle this error better.  Probably restart FSM.
          * xxx Parsing should probably happen when schema fetched. */
-        VLOG_WARN("xxx couldn't parse schema: %s",
+        VLOG_INFO("xxx couldn't parse schema: %s",
                   ovsdb_error_to_string(error));
         return;
     }
@@ -696,13 +696,13 @@ northd_process_msg(struct northd_ctx *ctx, struct jsonrpc_msg *msg)
 static void
 northd_run(struct northd_ctx *ctx, bool run_deltas)
 {
-    VLOG_WARN("xxx ========= northd_run: %s", ctx->data.name);
+    VLOG_INFO("xxx ========= northd_run: %s", ctx->data.name);
 
     if (!ctx->session) {
 #if 0
         northd_txn_abort_all(ctx);
 #endif
-        VLOG_WARN("xxx no session");
+        VLOG_INFO("xxx no session");
         return;
     }
 
@@ -716,7 +716,7 @@ northd_run(struct northd_ctx *ctx, bool run_deltas)
         struct jsonrpc_msg *msg;
         unsigned int seqno;
 
-        VLOG_WARN("xxx northd_run: iter %d", i);
+        VLOG_INFO("xxx northd_run: iter %d", i);
 
         seqno = jsonrpc_session_get_seqno(ctx->session);
         if (ctx->state_seqno != seqno) {
@@ -782,7 +782,7 @@ ddlog_table_update(struct ds *ds, ddlog_prog ddlog,
 
     error = ddlog_dump_ovsdb_delta(ddlog, db, table, &updates);
     if (error) {
-        VLOG_WARN("xxx delta (%s) error: %d", table, error);
+        VLOG_INFO("xxx delta (%s) error: %d", table, error);
         return;
     }
 
@@ -828,7 +828,7 @@ get_sb_ops(struct northd_ctx *ctx)
 
     struct json *ops = json_from_string(ops_s);
     free(ops_s);
-    VLOG_WARN("xxx sb postops: %s", json_to_string(ops, JSSF_PRETTY));
+    VLOG_INFO("xxx sb postops: %s", json_to_string(ops, JSSF_PRETTY));
 
     return ops;
 }
@@ -853,7 +853,7 @@ get_nb_ops(struct northd_ctx *ctx)
 
     struct json *ops = json_from_string(ops_s);
     free(ops_s);
-    VLOG_WARN("xxx nb postops: %s", json_to_string(ops, JSSF_PRETTY));
+    VLOG_INFO("xxx nb postops: %s", json_to_string(ops, JSSF_PRETTY));
 
     return ops;
 }
@@ -867,11 +867,11 @@ ddlog_handle_update(struct northd_ctx *ctx, bool northbound,
     }
 
     if (ddlog_transaction_start(ctx->ddlog)) {
-        VLOG_ERR("xxx Couldn't start transaction");
+        VLOG_WARN("xxx Couldn't start transaction");
         return;
     }
 
-    VLOG_WARN("xxx %s update: %s", northbound ? "nb" : "sb",
+    VLOG_INFO("xxx %s update: %s", northbound ? "nb" : "sb",
               json_to_string(table_updates, JSSF_PRETTY));
 
     const char *prefix = northbound ? "OVN_Northbound." : "OVN_Southbound.";
