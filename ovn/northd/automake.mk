@@ -68,6 +68,11 @@ ovn/northd/OVN_Southbound.dl: ovn/ovn-sb.ovsschema
 				-k Address_Set.name             \
 				-k Port_Group.name              \
 				-k Meter.name                   \
+				-k Logical_Flow.logical_datapath\
+				-k Logical_Flow.pipeline		\
+				-k Logical_Flow.table_id		\
+				-k Logical_Flow.priority		\
+				-k Logical_Flow.match			\
 				> $@
 
 CLEANFILES += ovn/northd/OVN_Northbound.dl ovn/northd/OVN_Southbound.dl
