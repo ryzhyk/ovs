@@ -17,6 +17,8 @@
 #include <getopt.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 #include "bitmap.h"
 #include "command-line.h"
@@ -46,11 +48,12 @@
 
 #include "ovn/northd/ovn_northd_ddlog/ddlog.h"
 
+/* Uncomment to record DDlog commands in a file. */
+//#define DDLOG_RECORDING
 
 VLOG_DEFINE_THIS_MODULE(ovn_northd);
 
 static unixctl_cb_func northd_exit;
-
 
 static const char *ovnnb_db;
 static const char *ovnsb_db;
@@ -199,7 +202,15 @@ ddlog_table_debug_dump(ddlog_prog ddlog, const char *table)
 static void
 ddlog_debug_dump(ddlog_prog ddlog OVS_UNUSED)
 {
+    /* Uncomment to enable DDlog profiling */
 #if 0
+    char *profile = ddlog_profile(ddlog);
+    VLOG_WARN("DDlog profile:\n%s", profile);
+    ddlog_string_free(profile);
+#endif
+
+#if 0
+    ddlog_table_debug_dump(ddlog, "lswitch.SwitchPortIPv4Address");
     ddlog_table_debug_dump(ddlog, "OVN_Southbound.Out_Port_Binding");
     ddlog_table_debug_dump(ddlog, "helpers.SwitchRouterPeer");
     ddlog_table_debug_dump(ddlog, "lrouter.RouterPortPeer");
@@ -1031,6 +1042,17 @@ main(int argc, char *argv[])
         VLOG_EMER("xxx Couldn't create ddlog instance");
     }
 
+#ifdef DDLOG_RECORDING
+    int replay_fd = open("replay.dat", O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
+    if (replay_fd < 0) {
+        VLOG_ERR("xxx Couldn't open replay.dat");
+    }
+
+    if (ddlog_record_commands(ddlog, replay_fd)) {
+        VLOG_ERR("xxx Couldn't enable DDlog command recording");
+    }
+#endif
+
     struct northd_ctx *nb_ctx = northd_ctx_create(ovnnb_db, "OVN_Northbound",
                                                   ddlog);
     struct northd_ctx *sb_ctx = northd_ctx_create(ovnsb_db, "OVN_Southbound",
@@ -1082,6 +1104,11 @@ main(int argc, char *argv[])
     northd_ctx_destroy(sb_ctx);
 
     ddlog_stop(ddlog);
+
+#ifdef DDLOG_RECORDING
+    fsync(replay_fd);
+    close(replay_fd);
+#endif
 
     unixctl_server_destroy(unixctl);
     service_stop();
