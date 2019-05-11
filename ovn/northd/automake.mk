@@ -89,7 +89,7 @@ ovn/northd/ovn_northd_ddlog/target/release/ovn_northd_cli: \
 	ovn/northd/OVN_Southbound.dl
 	$(AM_V_GEN)ddlog -i $< -L @DDLOG_LIB@
 	$(AM_V_at)cd ovn/northd/ovn_northd_ddlog && \
-		RUSTFLAGS='-L ../../lib/.libs -L ../../../lib/.libs -lssl -lcrypto' cargo build --release
+		RUSTFLAGS='-L ../../lib/.libs -L ../../../lib/.libs -lssl -lcrypto -Awarnings' cargo build --release
 
 CLEAN_LOCAL += clean-ddlog
 clean-ddlog:
