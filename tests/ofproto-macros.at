@@ -155,10 +155,10 @@ m4_define([OVN_CLEANUP],[
     OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 
     as northd
-    OVS_APP_EXIT_AND_WAIT([ovn-northd-ddlog])
+    OVS_APP_EXIT_AND_WAIT([ovn-northd])
 
     as northd-backup
-    OVS_APP_EXIT_AND_WAIT([ovn-northd-ddlog])
+    OVS_APP_EXIT_AND_WAIT([ovn-northd])
 
     OVN_CLEANUP_VSWITCH([main])
 ])
@@ -192,15 +192,15 @@ ovn_start () {
     ovn_init_db ovn-sb; ovn-sbctl init
     ovn_init_db ovn-nb; ovn-nbctl init
 
-    echo "starting ovn-northd-ddlog"
+    echo "starting ovn-northd"
     mkdir "$ovs_base"/northd
-    as northd start_daemon ovn-northd-ddlog -v \
+    as northd start_daemon ovn-northd -v \
                --ovnnb-db=unix:"$ovs_base"/ovn-nb/ovn-nb.sock \
                --ovnsb-db=unix:"$ovs_base"/ovn-sb/ovn-sb.sock
 
     echo "starting backup ovn-northd"
     mkdir "$ovs_base"/northd-backup
-    as northd-backup start_daemon ovn-northd-ddlog -v \
+    as northd-backup start_daemon ovn-northd -v \
                --ovnnb-db=unix:"$ovs_base"/ovn-nb/ovn-nb.sock \
                --ovnsb-db=unix:"$ovs_base"/ovn-sb/ovn-sb.sock
 }
