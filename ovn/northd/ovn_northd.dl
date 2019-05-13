@@ -380,7 +380,9 @@ sb.OutProxy_Port_Binding(.uuid_name          = pbinding.uuid_name,
     }.
 
 /*
- * SB_Global: copy nb_cfg and options from NB
+ * SB_Global: copy nb_cfg and options from NB.
+ * If NB_Global does not exist yet, just keep the current value of SB_Global,
+ * if any.
  */
 for (nb_global in nb.NB_Global) {
     sb.Out_SB_Global(.nb_cfg         = nb_global.nb_cfg,
@@ -390,6 +392,15 @@ for (nb_global in nb.NB_Global) {
                      .options        = nb_global.options,
                      .ipsec          = nb_global.ipsec)
 }
+
+sb.Out_SB_Global(.nb_cfg         = sb_global.nb_cfg,
+                 .external_ids   = sb_global.external_ids,
+                 .connections    = sb_global.connections,
+                 .ssl            = sb_global.ssl,
+                 .options        = sb_global.options,
+                 .ipsec          = sb_global.ipsec) :-
+    sb_global in sb.SB_Global(),
+    not nb.NB_Global().
 
 /*
  * NB_Global:
@@ -432,6 +443,14 @@ nb.Out_NB_Global(.sb_cfg        = sb_cfg,
         },
         _    -> opts
     }.
+
+/* SB_Global does not exist yet -- just keep the old value of NB_Global */
+nb.Out_NB_Global(.sb_cfg        = nb_global.sb_cfg,
+                 .hv_cfg        = nb_global.hv_cfg,
+                 .ipsec         = nb_global.ipsec,
+                 .options       = nb_global.options) :-
+    nb_global in nb.NB_Global(),
+    not sb.SB_Global().
 
 /*
  * Address_Set: copy from NB + additional records generated from NB Port_Group (two records for each
@@ -2472,7 +2491,7 @@ for (lsp in nb.Logical_Switch_Port
                                  .actions          = response_action,
                                  .external_ids     = map_empty())
                             // FIXME: is there a constraint somewhere that guarantees that build_dhcpv4_action
-                            // returns Some() for at most 1 address in lsp_addrs? Otherwise, simulate this breaks
+                            // returns Some() for at most 1 address in lsp_addrs? Otherwise, simulate this break
                             // by computing an aggregate that returns the first element of a group.
                             //break;
                         }

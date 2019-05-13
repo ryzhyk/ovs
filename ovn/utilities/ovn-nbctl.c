@@ -228,7 +228,7 @@ main(int argc, char *argv[])
     idl = the_idl = NULL;
 
     free(args);
-    sleep(1);
+    //sleep(1);
     exit(EXIT_SUCCESS);
 }
 

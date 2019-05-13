@@ -332,7 +332,7 @@ SwitchPortAllocatedMACDynAddress(lsport, dyn_addr) :-
                 },
                 Some{dynaddr} -> {
                     var haddr = eth_addr_to_uint64(dynaddr.ea);
-                    if ((haddr ^ mac_prefix) >> 64'd24 != 64'd0) {
+                    if ((haddr ^ mac_prefix) >> 32'd24 != 64'd0) {
                         /* existing dynamic address is no longer valid */
                         vec_push(need_addr, (deref(port).lsp._uuid, hint))
                     } else if (set_contains(used_addrs, haddr)) {

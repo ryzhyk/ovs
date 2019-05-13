@@ -68,6 +68,11 @@ ovn/northd/OVN_Southbound.dl: ovn/ovn-sb.ovsschema
 				-k Address_Set.name             \
 				-k Port_Group.name              \
 				-k Meter.name                   \
+				-k Logical_Flow.logical_datapath\
+				-k Logical_Flow.pipeline		\
+				-k Logical_Flow.table_id		\
+				-k Logical_Flow.priority		\
+				-k Logical_Flow.match			\
 				> $@
 
 CLEANFILES += ovn/northd/OVN_Northbound.dl ovn/northd/OVN_Southbound.dl
@@ -84,7 +89,7 @@ ovn/northd/ovn_northd_ddlog/target/release/ovn_northd_cli: \
 	ovn/northd/OVN_Southbound.dl
 	$(AM_V_GEN)ddlog -i $< -L @DDLOG_LIB@
 	$(AM_V_at)cd ovn/northd/ovn_northd_ddlog && \
-		RUSTFLAGS='-L ../../lib/.libs -L ../../../lib/.libs -lssl -lcrypto' cargo build --release
+		RUSTFLAGS='-L ../../lib/.libs -L ../../../lib/.libs -lssl -lcrypto -Awarnings' cargo build --release
 
 CLEAN_LOCAL += clean-ddlog
 clean-ddlog:
