@@ -1043,7 +1043,9 @@ main(int argc, char *argv[])
     }
 
 #ifdef DDLOG_RECORDING
-    int replay_fd = open("replay.dat", O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
+    char *replay_file = xasprintf("%s/replay.dat", ovs_logdir());
+    int replay_fd = open(replay_file, O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
+    free(replay_file);
     if (replay_fd < 0) {
         VLOG_ERR("xxx Couldn't open replay.dat");
     }
