@@ -4910,8 +4910,12 @@ SwitchPortAllocatedTags(lsp_uuid, tag) :-
 output relation SwitchPortNewDynamicTag(port: uuid, tag: Option<integer>)
 
 /* Case 1 */
-SwitchPortNewDynamicTag(lsp._uuid, set_nth(lsp.tag_request, 0)) :-
-    &SwitchPort(.lsp = lsp, .needs_dynamic_tag = false, .parent_name = parent_name).
+SwitchPortNewDynamicTag(lsp._uuid, tag) :-
+    &SwitchPort(.lsp = lsp, .needs_dynamic_tag = false),
+    var tag: Option<integer> = match (set_nth(lsp.tag_request, 0)) {
+        Some{0} -> None,
+        treq    -> treq
+    }.
 
 /* Case 2 */
 SwitchPortNewDynamicTag(lsp._uuid, Some{tag}) :-
