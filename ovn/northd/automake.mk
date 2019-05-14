@@ -10,7 +10,7 @@ EXTRA_DIST += \
 	ovn/northd/ovn-northd ovn/northd/ovn-northd.8.xml \
 	ovn/northd/ovn_northd.dl ovn/northd/ovn.dl ovn/northd/ovn.rs \
 	ovn/northd/ovn.toml ovn/northd/lswitch.dl ovn/northd/lrouter.dl \
-	ovn/northd/helpers.dl ovn/northd/ipam.dl
+	ovn/northd/helpers.dl ovn/northd/ipam.dl ovn/northd/docs/debugging.md
 CLEANFILES += ovn/northd/ovn-northd.8
 
 if DDLOG
