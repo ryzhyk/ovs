@@ -451,7 +451,7 @@ CHECK_PYFILES = \
 	tests/appctl.py \
 	tests/flowgen.py \
 	tests/ovsdb-monitor-sort.py \
-	tests/stable-id.py \
+	tests/stableid.py \
 	tests/test-daemon.py \
 	tests/test-json.py \
 	tests/test-jsonrpc.py \

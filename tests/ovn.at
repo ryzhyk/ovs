@@ -6478,7 +6478,7 @@ AT_CHECK([ovn-nbctl ls-add ls1])
 
 dnl When a tag is provided, no allocation is done
 AT_CHECK([ovn-nbctl --wait=sb lsp-add ls1 c0 parent1 3])
-AT_CHECK([ovn-nbctl lsp-get-tag c0 | stableid parent1 --strict], [0], [3
+AT_CHECK([ovn-nbctl lsp-get-tag c0 | stableid --strict parent1], [0], [3
 ])
 dnl The same 'tag' gets created in southbound database.
 AT_CHECK([ovn-sbctl --data=bare --no-heading --columns=tag find port_binding \
@@ -6522,7 +6522,7 @@ logical_port="c5" | stableid parent2], [0], [2
 ])
 
 dnl Delete a logical port and create a new one.
-ovn-nbctl lsp-get-tag c1 | stableid parent1 --del
+ovn-nbctl lsp-get-tag c1 | stableid --del parent1
 AT_CHECK([ovn-nbctl --wait=sb lsp-del c1])
 AT_CHECK([ovn-nbctl --wait=sb lsp-add ls1 c6 parent1 0])
 AT_CHECK([ovn-nbctl lsp-get-tag c6 | stableid parent1], [0], [1
@@ -6568,7 +6568,7 @@ AT_CHECK([ovn-nbctl ls-add ls2])
 dnl When there is no parent_name provided (for say, 'localnet'), 'tag_request'
 dnl gets copied to 'tag'
 AT_CHECK([ovn-nbctl --wait=sb lsp-add ls2 local0 "" 25])
-AT_CHECK([ovn-nbctl lsp-get-tag local0 | stableid no_name --strict], [0], [25
+AT_CHECK([ovn-nbctl lsp-get-tag local0 | stableid --strict no_name], [0], [25
 ])
 dnl The same 'tag' gets created in southbound database.
 AT_CHECK([ovn-sbctl --data=bare --no-heading --columns=tag find port_binding \
@@ -6579,7 +6579,7 @@ AT_CHECK([ovn-nbctl --wait=sb lsp-add ls2 local1 "" 0])
 AT_CHECK([ovn-nbctl lsp-get-tag local1 | stableid no_name])
 dnl change the tag_request.
 AT_CHECK([ovn-nbctl --wait=sb  set logical_switch_port local1 tag_request=50])
-AT_CHECK([ovn-nbctl lsp-get-tag local1 | stableid no_name --strict], [0], [50
+AT_CHECK([ovn-nbctl lsp-get-tag local1 | stableid --strict no_name], [0], [50
 ])
 
 AT_CLEANUP
