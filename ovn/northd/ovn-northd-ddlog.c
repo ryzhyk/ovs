@@ -205,7 +205,7 @@ ddlog_debug_dump(ddlog_prog ddlog OVS_UNUSED)
     /* Uncomment to enable DDlog profiling */
 #if 0
     char *profile = ddlog_profile(ddlog);
-    VLOG_WARN("DDlog profile:\n%s", profile);
+    VLOG_INFO("DDlog profile:\n%s", profile);
     ddlog_string_free(profile);
 #endif
 
@@ -353,9 +353,9 @@ northd_send_monitor_request(struct northd_ctx *ctx, struct northd_db *db)
     struct ovsdb_error *error;
 
     if (db->schema) {
-        VLOG_INFO("xxx schema: %s", json_to_string(db->schema, 0));
+        VLOG_DBG("xxx schema: %s", json_to_string(db->schema, 0));
     } else {
-        VLOG_INFO("xxx no schema");
+        VLOG_DBG("xxx no schema");
     }
     error = ovsdb_schema_from_json(db->schema, &schema);
     if (error) {
@@ -707,7 +707,7 @@ northd_process_msg(struct northd_ctx *ctx, struct jsonrpc_msg *msg)
 static void
 northd_run(struct northd_ctx *ctx, bool run_deltas)
 {
-    VLOG_INFO("xxx ========= northd_run: %s", ctx->data.name);
+    VLOG_DBG("xxx ========= northd_run: %s", ctx->data.name);
 
     if (!ctx->session) {
 #if 0
@@ -727,7 +727,7 @@ northd_run(struct northd_ctx *ctx, bool run_deltas)
         struct jsonrpc_msg *msg;
         unsigned int seqno;
 
-        VLOG_INFO("xxx northd_run: iter %d", i);
+        VLOG_DBG("xxx northd_run: iter %d", i);
 
         seqno = jsonrpc_session_get_seqno(ctx->session);
         if (ctx->state_seqno != seqno) {
@@ -839,7 +839,7 @@ get_sb_ops(struct northd_ctx *ctx)
 
     struct json *ops = json_from_string(ops_s);
     free(ops_s);
-    VLOG_INFO("xxx sb postops: %s", json_to_string(ops, JSSF_PRETTY));
+    VLOG_DBG("xxx sb postops: %s", json_to_string(ops, JSSF_PRETTY));
 
     return ops;
 }
@@ -864,7 +864,7 @@ get_nb_ops(struct northd_ctx *ctx)
 
     struct json *ops = json_from_string(ops_s);
     free(ops_s);
-    VLOG_INFO("xxx nb postops: %s", json_to_string(ops, JSSF_PRETTY));
+    VLOG_DBG("xxx nb postops: %s", json_to_string(ops, JSSF_PRETTY));
 
     return ops;
 }
@@ -882,21 +882,21 @@ ddlog_handle_update(struct northd_ctx *ctx, bool northbound,
         return;
     }
 
-    VLOG_INFO("xxx %s update: %s", northbound ? "nb" : "sb",
-              json_to_string(table_updates, JSSF_PRETTY));
+    VLOG_DBG("xxx %s update: %s", northbound ? "nb" : "sb",
+             json_to_string(table_updates, JSSF_PRETTY));
 
     const char *prefix = northbound ? "OVN_Northbound." : "OVN_Southbound.";
 
     char *updates_s = json_to_string(table_updates, 0);
     if (ddlog_apply_ovsdb_updates(ctx->ddlog, prefix, updates_s)) {
-        VLOG_ERR("xxx Couldn't add update");
+        VLOG_WARN("xxx Couldn't add update");
         free(updates_s);
         goto error;
     }
     free(updates_s);
 
     if (ddlog_transaction_commit(ctx->ddlog)) {
-        VLOG_ERR("xxx Couldn't commit transaction");
+        VLOG_WARN("xxx Couldn't commit transaction");
         goto error;
     }
 
@@ -1039,7 +1039,7 @@ main(int argc, char *argv[])
     ddlog_prog ddlog;
     ddlog = ddlog_run(1, true, NULL, 0, ddlog_print_error);
     if (!ddlog) {
-        VLOG_EMER("xxx Couldn't create ddlog instance");
+        VLOG_ERR("xxx Couldn't create ddlog instance");
     }
 
 #ifdef DDLOG_RECORDING
