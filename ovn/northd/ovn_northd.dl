@@ -435,7 +435,7 @@ nb.Out_NB_Global(.sb_cfg        = sb_cfg,
     nb.NB_Global(._uuid = nb_global_uuid, .ipsec = ipsec, .options = opts),
     sb.SB_Global(.nb_cfg = sb_cfg),
     sb.Chassis(.nb_cfg = chassis_cfg),
-    var hv_cfg = Aggregate((nb_global_uuid, ipsec, sb_cfg, opts), group_first(chassis_cfg)),
+    var hv_cfg = Aggregate((nb_global_uuid, ipsec, sb_cfg, opts), group_min(chassis_cfg)),
     var options = match (map_get(opts, "mac_prefix")) {
         None -> {
             var mac_prefix = eth_addr_mark_random(eth_addr_from_uint64(hash64(nb_global_uuid)));
