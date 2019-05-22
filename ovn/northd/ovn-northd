@@ -1,7 +1,0 @@
-#!/bin/bash
-
-DIR=$(dirname $0)
-
-#exec -a ovn-northd $DIR/ovn-northd-c "$@"
-
-exec -a ovn-northd $DIR/ovn-northd-ddlog "$@"

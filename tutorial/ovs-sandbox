@@ -536,7 +536,7 @@ if $ovn; then
     if $ddlog; then
         ovn_northd=ovn-northd-ddlog;
     else
-        ovn_northd=ovn-northd-c;
+        ovn_northd=ovn-northd;
     fi
     for i in $(seq $n_northds); do
         if [ $i -eq 1 ]; then inst=""; else inst=$i; fi

@@ -35,7 +35,7 @@ To OVS and OVN with `ovn-northd-ddlog` enabled:
 
 If you configured OVS with `ovn-northd-ddlog` enabled, OVN will start with
 `ovn-northd-ddlog` by default.  You can fall back to using the C version
-by editing the `ovn/northd/ovn-northd` script, uncommenting the `ovn-northd-c`
+by editing the `ovn/northd/ovn-northd` script, uncommenting the `ovn-northd`
 command and commenting out the `ovn-northd-ddlog`, and restarting OVN.
 
 ### Upgrading DDlog
