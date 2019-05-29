@@ -77,6 +77,7 @@ ovn/northd/OVN_Southbound.dl: ovn/ovn-sb.ovsschema
 				-k Logical_Flow.table_id		\
 				-k Logical_Flow.priority		\
 				-k Logical_Flow.match			\
+				-k Logical_Flow.actions			\
 				> $@
 
 CLEANFILES += ovn/northd/OVN_Northbound.dl ovn/northd/OVN_Southbound.dl
