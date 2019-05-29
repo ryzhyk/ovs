@@ -386,17 +386,11 @@ sb.OutProxy_Port_Binding(.uuid_name          = pbinding.uuid_name,
  */
 for (nb_global in nb.NB_Global) {
     sb.Out_SB_Global(.nb_cfg         = nb_global.nb_cfg,
-                     .external_ids   = nb_global.external_ids,
-                     .connections    = nb_global.connections,
-                     .ssl            = nb_global.ssl,
                      .options        = nb_global.options,
                      .ipsec          = nb_global.ipsec)
 }
 
 sb.Out_SB_Global(.nb_cfg         = sb_global.nb_cfg,
-                 .external_ids   = sb_global.external_ids,
-                 .connections    = sb_global.connections,
-                 .ssl            = sb_global.ssl,
                  .options        = sb_global.options,
                  .ipsec          = sb_global.ipsec) :-
     sb_global in sb.SB_Global(),

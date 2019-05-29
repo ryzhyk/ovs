@@ -144,7 +144,7 @@ To enable recording, simply uncomment the following line in
 ```
 
 DDlog should now create a `replay.dat` file, which contains the log of transactions
-in the DDlog command format documente
+in the DDlog command format documented
 [here](https://github.com/ryzhyk/differential-datalog/blob/master/doc/testing/testing.md#command-reference).
 
 To replay the log, use the DDlog executable compiled along with the static library:
