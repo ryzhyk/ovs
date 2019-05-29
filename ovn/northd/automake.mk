@@ -62,6 +62,9 @@ ovn/northd/OVN_Southbound.dl: ovn/ovn-sb.ovsschema
 				-p Port_Binding     	\
 				--ro Port_Binding.chassis       \
 				--ro Port_Binding.encap         \
+				--ro SB_Global.ssl              \
+				--ro SB_Global.connections      \
+				--ro SB_Global.external_ids     \
 				-k Multicast_Group.datapath     \
 				-k Multicast_Group.name         \
 				-k Multicast_Group.tunnel_key   \
